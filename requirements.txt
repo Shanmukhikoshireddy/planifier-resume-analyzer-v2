@@ -1,0 +1,77 @@
+
+# FastAPI
+
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+
+# Validation & Settings
+
+pydantic==2.13.4
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
+email-validator==2.2.0
+
+# Database
+
+pymongo==4.13.2
+dnspython==2.8.0
+
+# MinIO
+
+minio==7.2.20
+
+# OpenAI
+
+openai==1.97.0
+
+# AI / Embeddings
+
+torch==2.12.1
+transformers==4.57.6
+sentence-transformers==5.0.0
+huggingface-hub==0.36.2
+safetensors==0.8.0
+tokenizers==0.22.2
+
+# Machine Learning
+
+numpy==2.5.0
+scikit-learn==1.9.0
+scipy==1.18.0
+
+# Resume Parsing
+
+pypdf==5.8.0
+python-docx==1.2.0
+lxml==6.1.1
+
+# Multipart Upload
+
+python-multipart==0.0.20
+
+# HTTP Client
+
+httpx==0.28.1
+requests==2.34.2
+
+# Logging
+
+loguru==0.7.3
+
+# Utilities
+
+orjson==3.11.1
+tenacity==9.1.2
+tqdm==4.68.3
+
+# Testing
+
+pytest==8.4.1
+
+
+# Resume Parsing & Conversion
+
+pypdf==5.8.0
+python-docx==1.2.0
+docx2pdf==0.1.8
+lxml==6.1.1
