@@ -24,21 +24,13 @@ def get_resume(
             detail="Resume not found.",
         )
     resume_url = minio_repository.get_presigned_url(
-
         profile["resume_path"]
-
     )
-
     return {
-
         "resume_id": resume_id,
-
         "candidate_name": profile.get("candidate_name"),
-
         "file_name": profile.get("file_name"),
-
         "resume_url": resume_url,
-
     }
 
 # List All Resumes

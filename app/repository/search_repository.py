@@ -40,11 +40,11 @@ class SearchRepository(BaseRepository):
                         "skills"
                     ),
                     "semantic_score": candidate.get(
-                        "semantic_score",
+                        "semantic_score"*100,
                         0,
                     ),
                     "rerank_score": candidate.get(
-                        "rerank_score",
+                        "rerank_score"*100,
                         0,
                     ),
                     "skill_match_percentage": candidate.get(
