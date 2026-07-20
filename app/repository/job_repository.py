@@ -11,6 +11,7 @@ class JobRepository(BaseRepository):
     def create_job(
         self,
         job: dict,
+        original_job_description: str,
         embedding: list,
         job_position: str,
         received_within: str,
@@ -18,6 +19,7 @@ class JobRepository(BaseRepository):
         document = {
             "title": job.get("title", ""),
             "job_position": job_position,
+            "original_job_description": original_job_description,
             "job_description": job,
             "job_embedding": embedding,
             "received_within": received_within,

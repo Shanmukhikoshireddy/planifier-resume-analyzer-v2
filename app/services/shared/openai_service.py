@@ -25,6 +25,7 @@ class OpenAIService:
                         model=self.model,
                         messages=messages,
                     )
+                    logger.info("response: ",response)
                     content = response.choices[0].message.content
                     return content.strip()
                 except Exception as e:

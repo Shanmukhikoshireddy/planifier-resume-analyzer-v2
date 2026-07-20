@@ -32,12 +32,19 @@ class MinioScheduler:
             # Skip folders
             if object_path.endswith("/"):
                 continue
-            if object_path.lower().endswith(".pdf"):
 
-                logger.info(
-                    f"Skipping generated PDF : {object_path}"
-                )
+            SUPPORTED_EXTENSIONS = {
+                ".pdf",
+                ".doc",
+                ".docx",
+                ".xls",
+                ".xlsx",
+            }
 
+            extension = "." + object_path.lower().split(".")[-1]
+
+            if extension not in SUPPORTED_EXTENSIONS:
+                logger.info(f"Unsupported file : {object_path}")
                 continue
 
             # Already processed?

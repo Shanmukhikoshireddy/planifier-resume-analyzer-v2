@@ -8,8 +8,10 @@ from app.services.ingestion.embedding_service import EmbeddingService
 from app.services.search.cache_service import CacheService
 from app.services.search.reranker_service import RerankerService
 from app.services.search.scoring_service import ScoringService
-from app.prompts.job_prompt import build_job_prompt
+from app.services.orchestrator.prompt_parser_service import PromptParserService
+# from app.prompts.job_prompt import build_job_prompt
 from app.prompts.reasoning_prompt import build_reasoning_prompt
+from app.services.orchestrator.candidate_filter_service import CandidateFilterService
 import re
 import json
 class SearchService:
@@ -18,11 +20,14 @@ class SearchService:
         self.search_repository = SearchRepository()
         self.embedding_repository = EmbeddingRepository()
         self.profile_repository = ProfileRepository()
+
+        self.prompt_parser_service = PromptParserService()
         self.openai_service = OpenAIService()
         self.embedding_service = EmbeddingService()
         self.cache_service = CacheService()
         self.reranker_service = RerankerService()
         self.scoring_service = ScoringService()
+        self.candidate_filter_service = CandidateFilterService()
 
     # Search
     def search(
@@ -33,55 +38,36 @@ class SearchService:
         page: int,
         page_size: int,
     ):
-        logger.info("Starting Candidate Search.")
-        logger.info("RAW JOB DESCRIPTION")
+        logger.info("=" * 80)
+        logger.info("STARTING CANDIDATE SEARCH")
+        logger.info("=" * 80)
+
+        logger.info("USER PROMPT")
         logger.info(job_description)
-        prompt = build_job_prompt(job_description)
-        job = self.openai_service.generate_json(
-            prompt
-        )
-        logger.info("RAW PARSED JOB")
+
+        # Parse the user prompt into a structured job
+        job = self.prompt_parser_service.parse(job_description)
+
+        logger.info("PARSED JOB")
         logger.info(job)
 
-        # Validate Response
-        if not isinstance(job, dict):
-            raise ValueError(
-                "OpenAI did not return a JSON object."
-            )
-
-        if not job:
-            raise ValueError(
-                "Parsed job is empty."
-            )
-
-        # Ensure Required Keys Exist
-        job.setdefault("title", "")
-        job.setdefault("experience", "")
-        job.setdefault("education", "")
-        job.setdefault("skills", [])
-        job.setdefault("certifications", [])
-        job.setdefault("responsibilities", [])
-        job.setdefault("qualifications", [])
-        job.setdefault("nice_to_have", [])
-        logger.info("FINAL JOB")
-        logger.info(job)
-
-        if not job["title"]:
+        if not job.get("title"):
             logger.warning(
-                "No title extracted from Job Description."
+                "No title extracted from prompt."
             )
-        if not job["skills"]:
-            logger.warning(
-                "No skills extracted from Job Description."
-            )
-        logger.info(
-            "Job Parsed Successfully."
-        )
 
-        # Continue Search
+        if not job.get("required_skills"):
+            logger.warning(
+                "No skills extracted from prompt."
+            )
+
+        logger.info("Prompt parsed successfully.")
+
+        # Continue existing search pipeline
         return self.process_job(
             job=job,
             job_position=job_position,
+            original_job_description=job_description,
             received_within=received_within,
             page=page,
             page_size=page_size,
@@ -122,20 +108,58 @@ class SearchService:
         self,
         job: dict,
     ) -> str:
+
+        experience = job.get("experience") or {}
+
+        experience_text = ""
+
+        if isinstance(experience, dict):
+
+            minimum = experience.get("min")
+            maximum = experience.get("max")
+
+            if minimum is not None and maximum is not None:
+                experience_text = f"{minimum}-{maximum} years"
+
+            elif minimum is not None:
+                experience_text = f"{minimum}+ years"
+
+            elif maximum is not None:
+                experience_text = f"Up to {maximum} years"
+
+        else:
+            experience_text = str(experience)
+
         sections = [
-            job.get("title","",),
-            job.get("experience","",),
-            job.get("education","",),
-            " ".join(job.get("skills",[],)),
-            " ".join(job.get("responsibilities",[],)),
-            " ".join(job.get("qualifications",[],)),
-            " ".join(job.get("nice_to_have",[],)),
+            job.get("title", ""),
+            experience_text,
+            job.get("education", ""),
+            job.get("location", ""),
+            " ".join(
+                " ".join(skill.get("search_terms", []))
+                for skill in job.get("required_skills", [])
+                if isinstance(skill, dict)
+            ),
+            " ".join(
+                " ".join(skill.get("search_terms", []))
+                for skill in job.get("preferred_skills", [])
+                if isinstance(skill, dict)
+            ),
+
+            self.list_to_text(job.get("certifications", [])),
+
+            self.list_to_text(job.get("responsibilities", [])),
+
+            self.list_to_text(job.get("qualifications", [])),
+
+            self.list_to_text(job.get("nice_to_have", [])),
+            " ".join(job.get("keywords", [])),
         ]
-        return "\n".join([
-                section
-                for section in sections
-                if section
-            ]
+
+        return "\n".join(
+            str(section)
+            for section in sections
+            if section
         )
 
     # Process Job
@@ -143,6 +167,7 @@ class SearchService:
         self,
         job: dict,
         job_position: str,
+        original_job_description: str,
         received_within: str,
         page: int,
         page_size: int,
@@ -184,6 +209,7 @@ class SearchService:
         # Save Job
         job_id = self.job_repository.create_job(
             job=job,
+            original_job_description=original_job_description,
             embedding=job_embedding,
             job_position=job_position,
             received_within=received_within,)
@@ -213,22 +239,41 @@ class SearchService:
         page_size: int,
     ):
         logger.info("Running Atlas Vector Search...")
+
         vector_results = self.embedding_repository.search_similar_embeddings(
             embedding=job_embedding,
             job_position=job_position,
             received_within=received_within,
         )
+
         logger.info(f"Retrieved {len(vector_results)} candidates.")
+
         candidates = []
+
         for result in vector_results:
-            profile = self.profile_repository.get_profile(result["resume_id"])
+
+            profile = self.profile_repository.get_profile(
+                result["resume_id"]
+            )
+
             if profile is None:
                 continue
-            profile["semantic_score"] = result.get("embedding_score",0,)
+
+            profile["semantic_score"] = result.get(
+                "embedding_score",
+                0,
+            )
+
             candidates.append(profile)
-        logger.info(f"Loaded {len(candidates)} candidate profiles.")
+
+        logger.info(
+            f"Loaded {len(candidates)} candidate profiles."
+        )
+
         if not candidates:
+
             logger.warning("No candidates found.")
+
             return {
                 "job_id": job_id,
                 "page": page,
@@ -237,6 +282,47 @@ class SearchService:
                 "total_pages": 0,
                 "results": [],
             }
+
+        ####################################################
+        # Business Rule Filtering
+        ####################################################
+
+        logger.info("=" * 80)
+        logger.info("BUSINESS RULE FILTERING")
+        logger.info("=" * 80)
+
+        logger.info(
+            f"Candidates before filtering : {len(candidates)}"
+        )
+
+        candidates = self.candidate_filter_service.filter(
+            candidates,
+            job,
+        )
+
+        logger.info(
+            f"Candidates after filtering : {len(candidates)}"
+        )
+
+        if not candidates:
+
+            logger.warning(
+                "No candidates remained after filtering."
+            )
+
+            return {
+                "job_id": job_id,
+                "page": page,
+                "page_size": page_size,
+                "total_candidates": 0,
+                "total_pages": 0,
+                "results": [],
+            }
+
+        ####################################################
+        # Cross Encoder + ATS
+        ####################################################
+
         return self.rerank_candidates(
             job_id=job_id,
             job=job,
@@ -300,68 +386,7 @@ class SearchService:
             page=page,
             page_size=page_size,
         )
-    def normalize_skill(
-        self,
-        skill: str,
-    ) -> str:
-        if not skill:
-            return ""
-        # Lowercase + Trim
-        skill = skill.lower().strip()
-        # Remove spaces, -, _, .
-        skill = re.sub(
-            r"[\s\-_\.]+",
-            "",
-            skill,
-        )
-        synonyms = {
-            # FastAPI
-            "fastapi": "fastapi",
-            "fastapiframework": "fastapi",
-            # JavaScript
-            "js": "javascript",
-            "javascript": "javascript",
-            # Node
-            "node": "nodejs",
-            "nodejs": "nodejs",
-            # React
-            "reactjs": "react",
-            "react": "react",
-            # MongoDB
-            "mongodb": "mongodb",
-            "mongodbatlas": "mongodbatlas",
-            # PostgreSQL
-            "postgres": "postgresql",
-            "postgresql": "postgresql",
-            # AI / ML
-            "ml": "machinelearning",
-            "machinelearning": "machinelearning",
-            "ai": "artificialintelligence",
-            "artificialintelligence": "artificialintelligence",
-            # NLP
-            "naturallanguageprocessing": "nlp",
-            "nlp": "nlp",
-            # Vector Search
-            "vectorsearch": "vectorsearch",
-            # Retrieval Augmented Generation
-            "rag": "rag",
-            "retrievalaugmentedgeneration": "rag",
-            # Large Language Models
-            "llm": "llm",
-            "large languagemodels": "llm",
-            "llmapplications": "llm",
-            # Hugging Face
-            "huggingface": "huggingface",
-            "huggingfacetransformers": "huggingface",
-            # REST
-            "restapi": "restapi",
-            "restapis": "restapi",
-        }
-        return synonyms.get(
-            skill,
-            skill,
-        )
-    # Score Candidates
+    
     def score_candidates(
         self,
         job_id: str,
@@ -370,133 +395,176 @@ class SearchService:
         page: int,
         page_size: int,
     ):
-        logger.info(
-            "Calculating ATS Scores..."
-        )
-        required_skills = [
-            self.normalize_skill(skill)
-            for skill in job.get(
-                "skills",
-                [],
-            )
-        ]
-        required_years = self.scoring_service.extract_years(
-            job.get(
-                "experience",
-                "",
-            )
-        )
-        required_education = job.get(
-            "education",
-            "",
-        ).lower()
-        required_certifications = {
-            cert.lower()
-            for cert in job.get(
-                "certifications",
-                [],
-            )
-        }
+
+        logger.info("=" * 80)
+        logger.info("CALCULATING ATS SCORES")
+        logger.info("=" * 80)
+
         scored_candidates = []
-        
+
         for candidate in candidates:
-            logger.info(type(candidate.get("education")))
-            logger.info(type(candidate.get("projects")))
-            logger.info(type(candidate.get("certifications")))
-            # Skills
-            candidate_skills = [
-                self.normalize_skill(skill)
-                for skill in candidate.get(
-                    "skills",
+
+            #############################################
+            # Calculate ATS
+            #############################################
+
+            result = self.scoring_service.calculate_score(
+
+                job=job,
+
+                candidate=candidate,
+
+            )
+
+            #############################################
+            # Update Candidate
+            #############################################
+
+            candidate.update({
+
+                "matched_skills":
+                    result["matched_skills"],
+
+                "missing_skills":
+                    result["missing_skills"],
+
+                "matched_preferred_skills":
+                    result["matched_preferred_skills"],
+
+                "matched_certifications":
+                    result["matched_certifications"],
+
+                "education_match":
+                    result["education_match"],
+
+                "score_breakdown":
+                    result["score_breakdown"],
+
+                "final_score":
+                    result["final_score"],
+
+            })
+
+            #####################################################
+            # Skill Match %
+            #####################################################
+
+            total_required = len(
+                job.get(
+                    "required_skills",
                     [],
                 )
-            ]
-            matched_skills = []
+            )
 
-            missing_skills = []
+            if total_required:
 
-            for skill in job.get("skills", []):
+                candidate["skill_match_percentage"] = round(
 
-                normalized = self.normalize_skill(skill)
+                    (
+                        len(
+                            result["matched_skills"]
+                        )
+                        /
+                        total_required
+                    ) * 100,
 
-                if normalized in candidate_skills:
+                    2,
 
-                    matched_skills.append(skill)
+                )
 
-                else:
-
-                    missing_skills.append(skill)
-            if required_skills:
-                skill_match_percentage = round((len(matched_skills)/len(required_skills))* 100,2,)
             else:
-                skill_match_percentage = 100
 
-            # Experience
-            try:
-                candidate_years = float(
-                    candidate.get("experience_years",0,))
-            except Exception:
-                candidate_years = 0
+                candidate["skill_match_percentage"] = 100
 
-            # Education
-            candidate_education = self.list_to_text(
+            #####################################################
+            # Overall Match Level
+            #####################################################
+
+            score = result["final_score"]
+
+            if score >= 90:
+                level = "Excellent"
+
+            elif score >= 80:
+                level = "Very Good"
+
+            elif score >= 70:
+                level = "Good"
+
+            elif score >= 55:
+                level = "Average"
+
+            elif score >= 40:
+                level = "Weak"
+
+            else:
+                level = "Poor"
+
+            candidate["match_level"] = level
+
+            scored_candidates.append(candidate)
+
+        #########################################################
+        # Sorting
+        #########################################################
+
+        scored_candidates.sort(
+
+            key=lambda candidate: (
+
+                candidate["final_score"],
+
                 candidate.get(
-                    "education",
-                    [],
-                )
-            ).lower()
+                    "rerank_score",
+                    0,
+                ),
 
-            education_match = (
-                required_education in candidate_education
-                if required_education
-                else True
-            )
+                candidate.get(
+                    "semantic_score",
+                    0,
+                ),
 
-            # Certifications
-            candidate_certifications = {
-                cert.lower()
-                for cert in candidate.get("certifications",[],)
-            }
+            ),
 
-            certification_match = bool(
-                required_certifications.intersection(candidate_certifications))
+            reverse=True,
 
-            # Final Score
-            final_score = self.scoring_service.final_score(
-                similarity_score=candidate.get("semantic_score",0,),
-                rerank_score=candidate.get("rerank_score",0,),
-                matched_skills=matched_skills,
-                required_skills=required_skills,
-                candidate_years=candidate_years,
-                required_years=required_years,
-                education_match=education_match,
-                certification_match=certification_match,
-            )
+        )
 
-            candidate["matched_skills"] = matched_skills
-            candidate["missing_skills"] = missing_skills
-            candidate["skill_match_percentage"] = skill_match_percentage
-            candidate["final_score"] = round(final_score,2,)
-            scored_candidates.append(
-                candidate
-            )
+        #########################################################
 
-        # Sort Candidate
-        scored_candidates.sort(key=lambda x: x["final_score"],reverse=True,)
         total_candidates = len(scored_candidates)
-        total_pages = (total_candidates + page_size - 1) // page_size
+
+        total_pages = (
+
+            total_candidates
+            +
+            page_size
+            -
+            1
+
+        ) // page_size
+
         logger.info(
-            "ATS Scoring Completed."
+
+            f"ATS completed for {total_candidates} candidates."
+
         )
+
         return self.generate_reasoning(
+
             job_id=job_id,
+
             candidates=scored_candidates,
+
             total_candidates=total_candidates,
+
             total_pages=total_pages,
+
             page=page,
+
             page_size=page_size,
+
         )
-    
     # Generate Reasoning
     def generate_reasoning(
         self,
@@ -601,7 +669,20 @@ class SearchService:
             "title": job.get("title"),
             "experience": job.get("experience"),
             "education": job.get("education"),
-            "skills": job.get("skills",[],),
+            "required_skills": job.get(
+                "required_skills",
+                [],
+            ),
+
+            "preferred_skills": job.get(
+                "preferred_skills",
+                [],
+            ),
+
+            "excluded_skills": job.get(
+                "excluded_skills",
+                [],
+            ),
             "responsibilities": job.get("responsibilities",[],),
             "qualifications": job.get("qualifications",[],),
             "nice_to_have": job.get("nice_to_have",[],),
