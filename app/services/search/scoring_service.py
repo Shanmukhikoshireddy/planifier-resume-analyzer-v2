@@ -113,27 +113,85 @@ class ScoringService:
         required,
         candidate,
     ):
+        """
+        Calculate certification score.
+
+        Supports both:
+        - ["AWS Certified"]
+        - [
+            {
+                "certification": "AWS Certified",
+                "search_terms": [
+                    "AWS",
+                    "AWS Cloud Practitioner",
+                    ...
+                ]
+            }
+        ]
+        """
 
         if not required:
-
             return (
                 self.certification_weight,
                 [],
             )
 
-        required = {
-            x.lower().strip()
-            for x in required
-        }
+        candidate = [
+            c.lower().strip()
+            for c in candidate
+            if c
+        ]
 
-        candidate = {
-            x.lower().strip()
-            for x in candidate
-        }
+        matched = []
 
-        matched = list(
-            required.intersection(candidate)
-        )
+        for cert in required:
+
+            # ---------------------------------
+            # Backward compatibility (string)
+            # ---------------------------------
+            if isinstance(cert, str):
+
+                cert_name = cert.strip()
+
+                if any(
+                    cert_name.lower() in c
+                    for c in candidate
+                ):
+                    matched.append(cert_name)
+
+                continue
+
+            # ---------------------------------
+            # New object format
+            # ---------------------------------
+            if not isinstance(cert, dict):
+                continue
+
+            cert_name = cert.get(
+                "certification",
+                "",
+            ).strip()
+
+            search_terms = cert.get(
+                "search_terms",
+                [],
+            )
+
+            found = False
+
+            for term in search_terms:
+
+                if not term:
+                    continue
+
+                term = term.lower().strip()
+
+                if any(term in c for c in candidate):
+                    found = True
+                    break
+
+            if found:
+                matched.append(cert_name)
 
         percentage = (
             len(matched)
@@ -149,7 +207,6 @@ class ScoringService:
             round(score, 2),
             matched,
         )
-
     # Job Title Score
 
     def job_title_score(

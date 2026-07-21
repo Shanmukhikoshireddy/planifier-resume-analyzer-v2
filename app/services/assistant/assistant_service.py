@@ -28,9 +28,23 @@ class AssistantService:
 
         if intent == "SEARCH":
 
-            return self.search_service.search(
+            parsed = self.prompt_parser.parse(
+                request.job_description
+            )
+
+            intent = parsed["intent"]
+
+            if intent == "GENERAL":
+                return self.answer_general(
+                    request.job_description
+                )
+
+            job = parsed["job"]
+
+            return self.search_service.process_job(
+                job=job,
                 job_position=request.job_position,
-                job_description=request.job_description,
+                original_job_description=request.job_description,
                 received_within=request.received_within,
                 page=page,
                 page_size=page_size,

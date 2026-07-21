@@ -121,7 +121,55 @@ Rules
    - [] for arrays
    - null for numbers
 
+Experience Extraction Rules:
 
+1. If the user says:
+   - "4 years experience"
+   - "with 4 years"
+   - "having 4 years"
+
+Return:
+
+"experience": {
+    "min": 4,
+    "max": 4
+}
+
+2. If the user says:
+   - minimum 4 years
+   - at least 4 years
+   - 4+ years
+   - more than 4 years
+
+Return:
+
+"experience": {
+    "min": 4,
+    "max": null
+}
+
+3. If the user says:
+   - less than 4 years
+   - maximum 4 years
+   - up to 4 years
+
+Return:
+
+"experience": {
+    "min": null,
+    "max": 4
+}
+
+4. If the user specifies a range:
+   - 4 to 6 years
+   - between 4 and 6 years
+
+Return:
+
+"experience": {
+    "min": 4,
+    "max": 6
+}
 Required Skill Format
 
 Each required skill must be:
@@ -183,6 +231,62 @@ search_terms
     "Hugging Face"
 ]
 
+Certification Format
+
+Each certification must be:
+
+{
+    "certification":"",
+    "search_terms":[]
+}
+
+certification
+Certification Extraction Rules
+
+1. Extract only certifications explicitly requested by the recruiter.
+2. Normalize certification names.
+3. Generate common aliases and certification variants in search_terms.
+4. Preserve certification families (AWS, Azure, Google Cloud, Kubernetes, Oracle, Salesforce, etc.).
+5. Do not infer certifications from technologies unless the recruiter explicitly requests certifications.
+
+Normalized recruiter certification.
+
+search_terms
+
+Generate recruiter-friendly certification search aliases.
+
+Include:
+
+- Official certification name
+- Common abbreviations
+- Certification family
+- Certification levels
+- Equivalent certification titles
+
+Rules
+
+- First element MUST be the certification name.
+- Maximum 15 search terms.
+- Remove duplicates.
+- Do not invent unrelated certifications.
+- If a recruiter asks for a certification family (for example AWS Certified), include all well-known certifications from that family.
+
+Examples
+
+"certifications": [
+    {
+        "certification": "AWS Certified",
+        "search_terms": [
+            "AWS Certified",
+            "AWS",
+            "AWS Cloud Practitioner",
+            "AWS Solutions Architect",
+            "AWS Developer Associate",
+            "AWS SysOps Administrator",
+            "AWS DevOps Engineer"
+        ]
+    }
+]
 
 Return ONLY valid JSON.
 

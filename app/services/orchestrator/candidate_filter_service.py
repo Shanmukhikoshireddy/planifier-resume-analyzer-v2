@@ -66,29 +66,25 @@ class CandidateFilterService:
                 )
             )
 
-            # Minimum + Maximum
+            # Exact experience (e.g. 4 years)
             if minimum is not None and maximum is not None:
 
-                if (
-                    minimum - self.EXPERIENCE_TOLERANCE
-                    <= years
-                    <= maximum + self.EXPERIENCE_TOLERANCE
-                ):
+                if years == minimum:
                     results.append(candidate)
 
-            # Only Minimum
+            # Minimum only (e.g. minimum 4 years / 4+ years)
             elif minimum is not None:
 
-                if years >= minimum - self.EXPERIENCE_TOLERANCE:
+                if years >= minimum:
                     results.append(candidate)
 
-            # Only Maximum
+            # Maximum only (e.g. less than 4 years)
             elif maximum is not None:
 
-                if years <= maximum + self.EXPERIENCE_TOLERANCE:
+                if years <= maximum:
                     results.append(candidate)
 
-        return results if results else candidates
+        return results
 
     def filter_by_job_title(self, candidates, job):
 

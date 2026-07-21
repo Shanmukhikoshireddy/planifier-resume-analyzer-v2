@@ -119,21 +119,23 @@ class PromptParserService:
         }
 
         for key, value in defaults.items():
-
             if key not in job:
                 job[key] = value
 
-        # String fields
+        # ----------------------------
+        # Normalize string fields
+        # ----------------------------
         for key in [
             "title",
             "education",
             "location",
         ]:
-
             if job[key] is None:
                 job[key] = ""
 
-        # Experience
+        # ----------------------------
+        # Normalize experience
+        # ----------------------------
         if not isinstance(job["experience"], dict):
             job["experience"] = {
                 "min": None,
@@ -143,7 +145,9 @@ class PromptParserService:
         job["experience"].setdefault("min", None)
         job["experience"].setdefault("max", None)
 
-        # List fields
+        # ----------------------------
+        # Initialize list fields
+        # ----------------------------
         for key in [
             "required_skills",
             "preferred_skills",
@@ -154,12 +158,68 @@ class PromptParserService:
             "nice_to_have",
             "keywords",
         ]:
-
             if job[key] is None:
                 job[key] = []
 
+        # ======================================================
+        # Normalize certifications
+        # ======================================================
+        normalized_certifications = []
 
+        for cert in job["certifications"]:
+
+            if isinstance(cert, str):
+                normalized_certifications.append(
+                    {
+                        "certification": cert,
+                        "search_terms": [cert],
+                    }
+                )
+                continue
+
+            if not isinstance(cert, dict):
+                continue
+
+            cert.setdefault("certification", "")
+            cert.setdefault("search_terms", [])
+
+            if cert["search_terms"] is None:
+                cert["search_terms"] = []
+
+            seen = set()
+            unique_terms = []
+
+            for term in cert["search_terms"]:
+
+                if not term:
+                    continue
+
+                term = term.strip()
+
+                if term.lower() not in seen:
+                    seen.add(term.lower())
+                    unique_terms.append(term)
+
+            primary = cert["certification"].strip()
+
+            if primary:
+
+                unique_terms = [
+                    t for t in unique_terms
+                    if t.lower() != primary.lower()
+                ]
+
+                unique_terms.insert(0, primary)
+
+            cert["search_terms"] = unique_terms
+
+            normalized_certifications.append(cert)
+
+        job["certifications"] = normalized_certifications
+
+        # ======================================================
         # Normalize required skills
+        # ======================================================
         normalized_required_skills = []
 
         for skill in job["required_skills"]:
@@ -182,7 +242,6 @@ class PromptParserService:
             if skill["search_terms"] is None:
                 skill["search_terms"] = []
 
-            # Remove duplicates while preserving order
             seen = set()
             unique_terms = []
 
@@ -197,7 +256,6 @@ class PromptParserService:
                     seen.add(term.lower())
                     unique_terms.append(term)
 
-            # Ensure the primary skill is always the first search term
             primary_skill = skill["skill"].strip()
 
             if primary_skill:

@@ -20,14 +20,14 @@ class SearchService:
         self.search_repository = SearchRepository()
         self.embedding_repository = EmbeddingRepository()
         self.profile_repository = ProfileRepository()
-
-        self.prompt_parser_service = PromptParserService()
         self.openai_service = OpenAIService()
         self.embedding_service = EmbeddingService()
         self.cache_service = CacheService()
         self.reranker_service = RerankerService()
         self.scoring_service = ScoringService()
         self.candidate_filter_service = CandidateFilterService()
+        
+
 
     # Search
     def search(
