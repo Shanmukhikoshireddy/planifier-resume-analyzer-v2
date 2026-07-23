@@ -1,5 +1,6 @@
 from datetime import datetime
 from app.repository.base_repository import BaseRepository
+from bson import ObjectId
 
 class ProfileRepository(BaseRepository):
     def __init__(self):
@@ -9,7 +10,6 @@ class ProfileRepository(BaseRepository):
     # Save Profile
     def save_profile(
         self,
-        resume_id: str,
         resume: dict,
         resume_path: str,
         file_hash: str,
@@ -21,7 +21,6 @@ class ProfileRepository(BaseRepository):
         extracted resume JSON.
         """
         document = resume.copy()
-        document["resume_id"] = resume_id
         document["job_position"] = resume.get(
             "job_position",
             "Unknown",
@@ -33,7 +32,8 @@ class ProfileRepository(BaseRepository):
         document["uploaded_at"] = datetime.utcnow()
         document["created_at"] = datetime.utcnow()
         document["updated_at"] = datetime.utcnow()
-        self.collection.insert_one(document)
+        result = self.collection.insert_one(document)
+        return str(result.inserted_id)
 
     # Duplicate Resume Check
     def resume_exists(
@@ -48,17 +48,26 @@ class ProfileRepository(BaseRepository):
         )
 
     # Get Profile
+
     def get_profile(
         self,
-        resume_id: str,
+        profile_id: str,
     ):
-        return self.collection.find_one(
+        profile = self.collection.find_one(
             {
-                "resume_id": resume_id,
+                "_id": ObjectId(profile_id),
                 "is_deleted": False,
-            },
-            {"_id": 0}
+            }
         )
+
+        if not profile:
+            return None
+
+        # Expose profile_id to the application
+        profile["profile_id"] = str(profile["_id"])
+        del profile["_id"]
+
+        return profile
 
     # Get All Profiles
     def get_all_profiles(
@@ -78,22 +87,22 @@ class ProfileRepository(BaseRepository):
     # Update Profile
     def update_profile(
         self,
-        resume_id: str,
+        profile_id: str,
         update_fields: dict,
     ):
         update_fields["updated_at"] = datetime.utcnow()
         self.collection.update_one(
-            {"resume_id": resume_id},
+            {"profile_id": profile_id},
             {"$set": update_fields}
         )
 
     # Delete Profile
     def delete_profile(
         self,
-        resume_id: str,
+        profile_id: str,
     ):
         self.collection.delete_one(
-            {"resume_id": resume_id}
+            {"profile_id": profile_id}
         )
 
     # Count Profiles
@@ -122,10 +131,10 @@ class ProfileRepository(BaseRepository):
     # Soft Delete Profile
     def soft_delete_profile(
         self,
-        resume_id: str,
+        profile_id: str,
     ):
         result = self.collection.update_one(
-            {"resume_id": resume_id},
+            {"profile_id": profile_id},
             {
                 "$set": {
                     "is_deleted": True,

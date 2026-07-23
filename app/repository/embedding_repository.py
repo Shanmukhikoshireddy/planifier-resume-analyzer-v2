@@ -8,7 +8,7 @@ class EmbeddingRepository(BaseRepository):
     # Save Embedding
     def save_embedding(
         self,
-        resume_id: str,
+        profile_id: str,
         embedding: list,
         embedding_model: str,
         dimension: int,
@@ -16,7 +16,7 @@ class EmbeddingRepository(BaseRepository):
         uploaded_at: datetime,
     ):
         document = {
-            "resume_id": resume_id,
+            "profile_id": profile_id,
             "embedding": embedding,
             "embedding_model": embedding_model,
             "dimension": dimension,
@@ -29,10 +29,10 @@ class EmbeddingRepository(BaseRepository):
     # Get Embedding
     def get_embedding(
         self,
-        resume_id: str,
+        profile_id: str,
     ):
         return self.collection.find_one(
-            {"resume_id": resume_id},
+            {"profile_id": profile_id},
             {"_id": 0}
 
         )
@@ -40,10 +40,10 @@ class EmbeddingRepository(BaseRepository):
     # Delete Embedding
     def delete_embedding(
         self,
-        resume_id: str,
+        profile_id: str,
     ):
         self.collection.delete_one(
-            {"resume_id": resume_id}
+            {"profile_id": profile_id}
         )
 
     # MongoDB Atlas Vector Search
@@ -101,7 +101,7 @@ class EmbeddingRepository(BaseRepository):
             {
                 "$project": {
                     "_id": 0,
-                    "resume_id": 1,
+                    "profile_id": 1,
                     "job_position": 1,
                     "uploaded_at": 1,
                     "embedding_score": {
@@ -134,11 +134,11 @@ class EmbeddingRepository(BaseRepository):
     # Update Embedding
     def update_embedding(
         self,
-        resume_id: str,
+        profile_id: str,
         embedding: list,
     ):
         self.collection.update_one(
-            {"resume_id": resume_id},
+            {"profile_id": profile_id},
             {
                 "$set": {
                     "embedding": embedding,
@@ -150,11 +150,11 @@ class EmbeddingRepository(BaseRepository):
     # Embedding Exists
     def embedding_exists(
         self,
-        resume_id: str,
+        profile_id: str,
     ) -> bool:
         return (
             self.collection.count_documents(
-                {"resume_id": resume_id}
+                {"profile_id": profile_id}
             )
             > 0
         )

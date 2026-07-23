@@ -21,6 +21,9 @@ class OpenAIService:
         try:
             for attempt in range(3):
                 try:
+                    logger.info(type(messages))
+                    logger.info(messages)
+                    
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,

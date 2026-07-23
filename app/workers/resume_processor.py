@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 from pathlib import Path
 from app.config.logging import logger
@@ -38,11 +37,6 @@ class ResumeProcessor:
         local_resume = None
         file_hash = ""
         try:
-
-            # Generate Resume ID
-            resume_id = str(
-                uuid.uuid4()
-            )
 
             # Download Resume
             local_resume = self._download_resume(
@@ -146,9 +140,7 @@ class ResumeProcessor:
                 logger.info(
                     "PDF uploaded to MinIO."
                 )
-            self._save_profile(
-
-                resume_id=resume_id,
+            profile_id = self._save_profile(
 
                 resume=structured_resume,
 
@@ -160,7 +152,7 @@ class ResumeProcessor:
 
             # Save Embedding
             self._save_embedding(
-                resume_id=resume_id,
+                profile_id=profile_id,
                 embedding=embedding,
                 job_position=structured_resume.get(
                     "job_position",
@@ -310,7 +302,6 @@ class ResumeProcessor:
     # Save Candidate Profile
     def _save_profile(
         self,
-        resume_id: str,
         resume: dict,
         resume_path: str,
         file_hash: str,
@@ -321,20 +312,17 @@ class ResumeProcessor:
         logger.info(
             "Saving candidate profile..."
         )
-        self.profile_repository.save_profile(
-            resume_id=resume_id,
+        return self.profile_repository.save_profile(
             resume=resume,
             resume_path=resume_path,
             file_hash=file_hash,
         )
-        logger.info(
-            "Candidate profile saved."
-        )
+        
 
     # Save Embedding
     def _save_embedding(
         self,
-        resume_id: str,
+        profile_id:str,
         embedding: list,
         job_position: str,
     ):
@@ -345,7 +333,7 @@ class ResumeProcessor:
             "Saving embedding..."
         )
         self.embedding_repository.save_embedding(
-            resume_id=resume_id,
+            profile_id=profile_id,
             embedding=embedding,
             embedding_model=settings.EMBEDDING_MODEL,
             dimension=len(embedding),

@@ -1,6 +1,16 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
+
 class SearchRequest(BaseModel):
-    job_position: str
-    job_description: str
+    # Existing conversation
+    job_id: Optional[str] = None
+
+    # Keeping this for compatibility
+    job_position: str = "all"
+
+    # User message (search / refinement / general question)
+    prompt: str
+
     received_within: str = "ALL"

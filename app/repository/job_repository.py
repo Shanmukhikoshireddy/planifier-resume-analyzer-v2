@@ -11,7 +11,7 @@ class JobRepository(BaseRepository):
     def create_job(
         self,
         job: dict,
-        original_job_description: str,
+        original_prompt: str,
         embedding: list,
         job_position: str,
         received_within: str,
@@ -19,8 +19,8 @@ class JobRepository(BaseRepository):
         document = {
             "title": job.get("title", ""),
             "job_position": job_position,
-            "original_job_description": original_job_description,
-            "job_description": job,
+            "original_prompt": original_prompt,
+            "prompt": job,
             "job_embedding": embedding,
             "received_within": received_within,
             "created_at": datetime.utcnow(),
@@ -28,6 +28,12 @@ class JobRepository(BaseRepository):
             "status": "PROCESSING",
             "cached": False,
             "search_result_count": 0,
+            "conversation": {
+                "messages": [],
+                "current_job": job,
+                "latest_search_id": None,
+                "context_summary": "",
+            },
         }
         result = self.collection.insert_one(document)
         return str(result.inserted_id)
@@ -58,7 +64,7 @@ class JobRepository(BaseRepository):
 
         # Flatten Parsed Job
         parsed_job = document.get(
-            "job_description",
+            "prompt",
             {}
         )
         return {
@@ -115,17 +121,25 @@ class JobRepository(BaseRepository):
             ),
 
         }
-    # Get All Jobs
-    def get_all_jobs(
-        self,
-    ):
+    # Get All Jobs (Sidebar)
+    def get_all_jobs(self):
+
         jobs = list(
             self.collection.find(
                 {
-                    "status": "COMPLETED",
-                }
+                    "status": {
+                        "$ne": "NEW"
+                    }
+                },
+                {
+                    "prompt.title": 1,
+                    "original_prompt": 1,
+                    "updated_at": 1,
+                    "status": 1,
+                    "search_result_count": 1,
+                },
             ).sort(
-                "created_at",
+                "updated_at",
                 -1,
             )
         )
@@ -134,67 +148,77 @@ class JobRepository(BaseRepository):
 
         for job in jobs:
 
-            parsed_job = job.get(
-                "job_description",
-                {},
-            )
+            history.append({
 
-            history.append(
-                {
-                    "job_id": str(
-                        job["_id"]
-                    ),
+                "job_id": str(job["_id"]),
 
-                    "designation": parsed_job.get(
-                        "title",
-                        "",
-                    ),
+                "title": job.get(
+                    "prompt",
+                    {},
+                ).get(
+                    "title",
+                    ""
+                ),
 
-                    "job_position": job.get(
-                        "job_position",
-                        "",
-                    ),
+                "last_prompt": job.get(
+                    "original_prompt",
+                    "",
+                ),
 
-                    "description":
-                    parsed_job.get(
-                        "summary",
-                        "",
-                    )
-                    or
-                    " ".join(
-                        parsed_job.get(
-                            "skills",
-                            [],
-                        )[:8]
-                    ),
+                "candidate_count": job.get(
+                    "search_result_count",
+                    0,
+                ),
 
-                    "received_within": job.get(
-                        "received_within",
-                        "ALL",
-                    ),
+                "status": job.get(
+                    "status",
+                ),
 
-                    "searched_at": job.get(
-                        "created_at",
-                    ),
+                "updated_at": job.get(
+                    "updated_at",
+                ),
 
-                    "candidate_count": job.get(
-                        "search_result_count",
-                        0,
-                    ),
-
-                    "status": job.get(
-                        "status",
-                        "UNKNOWN",
-                    ),
-
-                    "cached": job.get(
-                        "cached",
-                        False,
-                    ),
-                }
-            )
+            })
 
         return history
+
+
+    def get_chat(
+        self,
+        job_id: str,
+    ):
+
+        document = self.collection.find_one(
+            {
+                "_id": ObjectId(job_id)
+            }
+        )
+
+        if document is None:
+            return None
+
+        return {
+
+            "job_id": str(document["_id"]),
+
+            "status": document.get(
+                "status"
+            ),
+
+            "updated_at": document.get(
+                "updated_at"
+            ),
+
+            "search_result_count": document.get(
+                "search_result_count",
+                0,
+            ),
+
+            "conversation": document.get(
+                "conversation",
+                {},
+            ),
+        }
     # Delete Job
     def delete_job(
         self,
@@ -332,3 +356,209 @@ class JobRepository(BaseRepository):
         if job:
             job["_id"] = str(job["_id"])
         return job
+    
+
+
+    ############################################################
+    # Get Conversation
+    ############################################################
+
+    def get_conversation(
+        self,
+        job_id: str,
+    ):
+
+        document = self.collection.find_one(
+            {
+                "_id": ObjectId(job_id)
+            }
+        )
+
+        if not document:
+
+            return None
+
+        return document.get(
+            "conversation",
+            {}
+        )
+    
+
+    ############################################################
+    # Update Conversation
+    ############################################################
+
+    def update_conversation(
+        self,
+        job_id: str,
+        conversation: dict,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(job_id)
+            },
+
+            {
+                "$set": {
+
+                    "conversation": conversation,
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+
+    ############################################################
+    # Add Message
+    ############################################################
+
+    def add_message(
+        self,
+        job_id: str,
+        role: str,
+        content,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(job_id)
+            },
+
+            {
+                "$push": {
+
+                    "conversation.messages": {
+
+                        "role": role,
+
+                        "content": content,
+
+                        "timestamp": datetime.utcnow(),
+
+                    }
+
+                },
+
+                "$set": {
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+
+
+    ############################################################
+    # Update Current Job
+    ############################################################
+
+    def update_current_job(
+        self,
+        job_id: str,
+        job: dict,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(job_id)
+            },
+
+            {
+                "$set": {
+
+                    "conversation.current_job": job,
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+    ############################################################
+    # Update Latest Search
+    ############################################################
+
+    def update_latest_search(
+        self,
+        conversation_job_id: str,
+        latest_search_job_id: str,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(conversation_job_id)
+            },
+
+            {
+                "$set": {
+
+                    "conversation.latest_search_id": latest_search_job_id,
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+
+    def create_empty_job(
+        self,
+    ):
+
+        document = {
+
+            "title": "",
+
+            "job_position": "all",
+
+            "original_prompt": "",
+
+            "prompt": {},
+
+            "job_embedding": [],
+
+            "received_within": "ALL",
+
+            "conversation": {
+
+                "messages": [],
+
+                "current_job": {},
+
+                "latest_search_id": None,
+
+                "context_summary": "",
+
+            },
+
+            "status": "NEW",
+
+            "search_result_count": 0,
+
+            "cached": False,
+
+            "created_at": datetime.utcnow(),
+
+            "updated_at": datetime.utcnow(),
+
+        }
+
+        result = self.collection.insert_one(document)
+
+        return str(result.inserted_id)

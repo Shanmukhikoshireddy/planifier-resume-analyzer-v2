@@ -1,32 +1,33 @@
 from fastapi import APIRouter
 from fastapi import HTTPException
-from app.repository.search_repository import SearchRepository
+from app.services.candidate.candidate_action_service import (
+    CandidateActionService,
+)
 router = APIRouter(
     prefix="/api/cv-service",
     tags=["Candidate Actions"],
 )
-search_repository = SearchRepository()
+candidate_action_service = CandidateActionService()
 
 # Shortlist Candidate
 @router.post(
-    "/jd/{job_id}/shortlist/{resume_id}",
+    "/jd/{job_id}/shortlist/{profile_id}",
 )
 def shortlist_candidate(
     job_id: str,
-    resume_id: str,
+    profile_id: str,
 ):
     try:
-        search_repository.shortlist_candidate(
-            job_id,
-            resume_id,
+
+        response = candidate_action_service.shortlist_by_profile_id(
+            job_id=job_id,
+            profile_id=profile_id,
         )
-        return {
-            "message": "Candidate shortlisted successfully.",
-            "job_id": job_id,
-            "resume_id": resume_id,
-            "status": "SHORTLISTED",
-        }
+
+        return response
+
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=str(e),
@@ -34,24 +35,23 @@ def shortlist_candidate(
 
 # Reject Candidate
 @router.post(
-    "/reject/{job_id}/{resume_id}",
+    "/reject/{job_id}/{profile_id}",
 )
 def reject_candidate(
     job_id: str,
-    resume_id: str,
+    profile_id: str,
 ):
     try:
-        search_repository.reject_candidate(
-            job_id,
-            resume_id,
+
+        response = candidate_action_service.reject_by_profile_id(
+            job_id=job_id,
+            profile_id=profile_id,
         )
-        return {
-            "message": "Candidate rejected successfully.",
-            "job_id": job_id,
-            "resume_id": resume_id,
-            "status": "REJECTED",
-        }
+
+        return response
+
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=str(e),
@@ -65,9 +65,7 @@ def shortlisted_candidates(
     job_id: str,
 ):
     try:
-        return search_repository.get_shortlisted_candidates(
-            job_id
-        )
+        return candidate_action_service.shortlisted(job_id)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -82,10 +80,56 @@ def rejected_candidates(
     job_id: str,
 ):
     try:
-        return search_repository.get_rejected_candidates(
-            job_id
-        )
+        return candidate_action_service.rejected(job_id)
     except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        )
+    
+
+@router.post(
+    "/unshortlist/{job_id}/{profile_id}",
+)
+def unshortlist_candidate(
+    job_id: str,
+    profile_id: str,
+):
+    try:
+
+        response = candidate_action_service.undo_shortlist_by_profile_id(
+            job_id=job_id,
+            profile_id=profile_id,
+        )
+
+        return response
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        )
+    
+
+@router.post(
+    "/unreject/{job_id}/{profile_id}",
+)
+def unreject_candidate(
+    job_id: str,
+    profile_id: str,
+):
+    try:
+
+        response = candidate_action_service.undo_reject_by_profile_id(
+            job_id=job_id,
+            profile_id=profile_id,
+        )
+
+        return response
+
+    except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=str(e),

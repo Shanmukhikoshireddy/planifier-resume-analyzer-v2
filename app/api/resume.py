@@ -11,12 +11,12 @@ profile_repository = ProfileRepository()
 minio_repository = MinioRepository()
 
 # Get Resume Profile
-@router.get("/{resume_id}")
+@router.get("/{profile_id}")
 def get_resume(
-    resume_id: str,
+    profile_id: str,
 ):
     profile = profile_repository.get_profile(
-        resume_id
+        profile_id
     )
     if profile is None:
         raise HTTPException(
@@ -27,7 +27,7 @@ def get_resume(
         profile["resume_path"]
     )
     return {
-        "resume_id": resume_id,
+        "profile_id": profile_id,
         "candidate_name": profile.get("candidate_name"),
         "file_name": profile.get("file_name"),
         "resume_url": resume_url,
@@ -40,12 +40,12 @@ def get_resumes():
 
 
 # Download Resume
-@router.get("/download/{resume_id}")
+@router.get("/download/{profile_id}")
 def download_resume(
-    resume_id: str,
+    profile_id: str,
 ):
     profile = profile_repository.get_profile(
-        resume_id
+        profile_id
     )
     if profile is None:
         raise HTTPException(
@@ -67,11 +67,11 @@ def download_resume(
     }
 
 # Soft Delete Resume
-@router.delete("/{resume_id}",)
+@router.delete("/{profile_id}",)
 
-def delete_resume(resume_id: str,):
+def delete_resume(profile_id: str,):
     updated = profile_repository.soft_delete_profile(
-        resume_id
+        profile_id
     )
     if not updated:
         raise HTTPException(

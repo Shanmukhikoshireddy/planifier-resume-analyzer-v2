@@ -1,6 +1,8 @@
 from datetime import datetime
 from bson import ObjectId
 from app.repository.base_repository import BaseRepository
+import re
+from app.config.logging import logger
 
 class SearchRepository(BaseRepository):
     def __init__(self):
@@ -16,56 +18,153 @@ class SearchRepository(BaseRepository):
         candidates: list,
     ):
         documents = []
+
         for candidate in candidates:
+
             documents.append(
                 {
                     "job_id": job_id,
-                    "resume_id": candidate["resume_id"],
-                    "candidate_name": candidate.get(
-                        "candidate_name"
-                    ),
-                    "email": candidate.get(
-                        "email"
-                    ),
-                    "phone": candidate.get(
-                        "phone"
-                    ),
-                    "location": candidate.get(
-                        "location"
-                    ),
-                    "experience": candidate.get(
-                        "total_experience"
-                    ),
-                    "skills": candidate.get(
-                        "skills"
-                    ),
-                    "semantic_score": candidate.get("semantic_score", 0) * 100,
 
-                    "rerank_score": candidate.get("rerank_score", 0) * 100,
-                    "skill_match_percentage": candidate.get(
-                        "skill_match_percentage",
-                        0,
-                    ),
-                    "matched_skills": candidate.get(
-                        "matched_skills",
+                    "profile_id": candidate.get("profile_id"),
+
+                    "candidate_name": candidate.get("candidate_name"),
+
+                    "email": candidate.get("email"),
+
+                    "phone": candidate.get("phone"),
+
+                    "location": candidate.get("location"),
+
+                    "designation": candidate.get("designation"),
+
+                    "job_position": candidate.get("job_position"),
+
+                    "current_company": candidate.get("current_company"),
+
+                    "experience": candidate.get("total_experience"),
+
+                    "experience_years": candidate.get("experience_years"),
+
+                    "summary": candidate.get("summary"),
+
+                    "skills": candidate.get(
+                        "skills",
                         [],
                     ),
-                    "missing_skills": candidate.get(
-                        "missing_skills",
+
+                    "education": candidate.get(
+                        "education",
                         [],
                     ),
-                    "final_score": candidate.get(
-                        "final_score",
-                        0,
+
+                    "projects": candidate.get(
+                        "projects",
+                        [],
                     ),
+
+                    "certifications": candidate.get(
+                        "certifications",
+                        [],
+                    ),
+
+                    "resume_text": candidate.get(
+                        "resume_text",
+                    ),
+
+                    ####################################################
+                    # Search Scores
+                    ####################################################
+
+                    "semantic_score":
+                        candidate.get(
+                            "semantic_score",
+                            0,
+                        ) * 100,
+
+                    "rerank_score":
+                        candidate.get(
+                            "rerank_score",
+                            0,
+                        ) * 100,
+
+                    "skill_match_percentage":
+                        candidate.get(
+                            "skill_match_percentage",
+                            0,
+                        ),
+
+                    "matched_skills":
+                        candidate.get(
+                            "matched_skills",
+                            [],
+                        ),
+
+                    "missing_skills":
+                        candidate.get(
+                            "missing_skills",
+                            [],
+                        ),
+
+                    "matched_preferred_skills":
+                        candidate.get(
+                            "matched_preferred_skills",
+                            [],
+                        ),
+
+                    "matched_certifications":
+                        candidate.get(
+                            "matched_certifications",
+                            [],
+                        ),
+
+                    "education_match":
+                        candidate.get(
+                            "education_match",
+                        ),
+
+                    "score_breakdown":
+                        candidate.get(
+                            "score_breakdown",
+                            {},
+                        ),
+
+                    "match_level":
+                        candidate.get(
+                            "match_level",
+                        ),
+
+                    "final_score":
+                        candidate.get(
+                            "final_score",
+                            0,
+                        ),
+
+                    ####################################################
+                    # Candidate Status
+                    ####################################################
+
                     "candidate_status": "PENDING",
+
+                    ####################################################
+                    # AI Reasoning
+                    ####################################################
+
                     "reasoning_generated": False,
-                    "reasoning": candidate.get("reasoning",None),
+
+                    "reasoning": None,
+
+                    ####################################################
+                    # Audit
+                    ####################################################
+
                     "created_at": datetime.utcnow(),
+
                     "updated_at": datetime.utcnow(),
                 }
             )
+
         if documents:
+
             self.collection.insert_many(
                 documents
             )
@@ -89,13 +188,13 @@ class SearchRepository(BaseRepository):
     def get_candidate(
         self,
         job_id: str,
-        resume_id: str,
+        profile_id: str,
     ):
         
         return self.collection.find_one(
         {
             "job_id": job_id,
-            "resume_id": resume_id,
+            "profile_id": profile_id,
         },
         {"_id": 0}
     )
@@ -104,12 +203,12 @@ class SearchRepository(BaseRepository):
     def shortlist_candidate(
         self,
         job_id: str,
-        resume_id: str,
+        profile_id: str,
     ):
         self.collection.update_one(
             {
                 "job_id": job_id,
-                "resume_id": resume_id,
+                "profile_id": profile_id,
             },
             {
                 "$set": {
@@ -123,12 +222,12 @@ class SearchRepository(BaseRepository):
     def reject_candidate(
         self,
         job_id: str,
-        resume_id: str,
+        profile_id: str,
     ):
         self.collection.update_one(
             {
                 "job_id": job_id,
-                "resume_id": resume_id,
+                "profile_id": profile_id,
             },
             {
                 "$set": {
@@ -137,18 +236,18 @@ class SearchRepository(BaseRepository):
                 }
             }
         )
-
+    
     # Save AI Reasoning
     def save_reasoning(
         self,
         job_id: str,
-        resume_id: str,
+        profile_id: str,
         reasoning: str,
     ):
         self.collection.update_one(
             {
                 "job_id": job_id,
-                "resume_id": resume_id,
+                "profile_id": profile_id,
             },
             {
                 "$set": {
@@ -164,12 +263,12 @@ class SearchRepository(BaseRepository):
     def get_reasoning(
         self,
         job_id: str,
-        resume_id: str,
+        profile_id: str,
     ):
         return self.collection.find_one(
             {
                 "job_id": job_id,
-                "resume_id": resume_id,
+                "profile_id": profile_id,
             },
             {
                 "_id": 0,
@@ -230,4 +329,75 @@ class SearchRepository(BaseRepository):
                 "final_score",
                 -1,
             )
+        )
+
+    def get_candidate_by_name(
+        self,
+        job_id,
+        candidate_name,
+    ):
+        # First try exact match
+        candidate = self.collection.find_one(
+            {
+                "job_id": job_id,
+                "candidate_name": {
+                    "$regex": f"^{re.escape(candidate_name)}$",
+                    "$options": "i",
+                },
+            }
+        )
+
+        if candidate:
+            return candidate
+
+        # If no exact match, try partial match
+        return self.collection.find_one(
+            {
+                "job_id": job_id,
+                "candidate_name": {
+                    "$regex": re.escape(candidate_name),
+                    "$options": "i",
+                },
+            }
+        )
+    
+    def undo_shortlist(
+        self,
+        job_id,
+        profile_id,
+    ):
+        self.collection.update_one(
+            {
+                "job_id": job_id,
+                "profile_id": profile_id,
+            },
+            {
+                "$set": {
+                    "candidate_status": "PENDING",
+                    "updated_at": datetime.utcnow(),
+                }
+            }
+        )
+
+
+    def undo_reject(
+        self,
+        job_id: str,
+        profile_id: str,
+    ):
+        logger.info(">>> SearchRepository.undo_reject")
+        logger.info(job_id)
+        logger.info(profile_id)
+
+        self.collection.update_one(
+            {
+                "job_id": job_id,
+                "profile_id": profile_id,
+            },
+            {
+                "$set": {
+                    "candidate_status": "PENDING",
+                    "updated_at": datetime.utcnow(),
+                }
+            }
         )

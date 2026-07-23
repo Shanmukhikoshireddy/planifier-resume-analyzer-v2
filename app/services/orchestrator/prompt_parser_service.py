@@ -4,33 +4,13 @@ from app.services.shared.openai_service import OpenAIService
 
 
 class PromptParserService:
-    """
-    Converts a natural language user prompt into a structured job JSON.
-
-    Examples:
-        "Need Python developer with FastAPI"
-        "Find AI/ML candidates with 2 years experience"
-        "Python developer in Hyderabad"
-
-    Returns:
-        {
-            "title": "...",
-            "experience": "...",
-            "education": "...",
-            "skills": [],
-            "certifications": [],
-            "responsibilities": [],
-            "qualifications": [],
-            "nice_to_have": []
-        }
-    """
 
     def __init__(self):
         self.openai_service = OpenAIService()
 
     def parse(self, prompt: str) -> dict:
         """
-        Parse a natural language prompt into a structured job object.
+        Parse a natural language prompt into a structured request.
         """
 
         logger.info("=" * 80)
@@ -47,7 +27,9 @@ class PromptParserService:
 
         logger.info("Sending prompt to OpenAI...")
 
-        response = self.openai_service.generate_json(llm_prompt)
+        response = self.openai_service.generate_json(
+            llm_prompt
+        )
 
         logger.info("OpenAI Response:")
         logger.info(response)
@@ -57,15 +39,35 @@ class PromptParserService:
                 "OpenAI did not return a valid JSON object."
             )
 
-        intent = response.get("intent")
+        intent = str(response.get("intent", "")).strip().upper()
 
-        if intent not in ["SEARCH", "GENERAL"]:
-            raise ValueError(
-                "OpenAI did not return a valid intent."
-            )
+        valid_intents = {
+            "SEARCH",
+            "GENERAL",
+            "SHORTLIST",
+            "REJECT",
+            "SHOW_SHORTLISTED",
+            "SHOW_REJECTED",
+            "UNDO_SHORTLIST",
+            "UNDO_REJECT",
+            "SEARCH_MODIFICATION",
+            "SEARCH_HISTORY",
+            "COMPARE_CANDIDATES",
+            "CANDIDATE_REASONING",
+            "RESET_SEARCH",
+        }
+
+        logger.info(f"Intent after normalization: '{intent}'")
+        logger.info(f"Valid? {intent in valid_intents}")
+
+        if intent not in valid_intents:
+            raise ValueError(f"OpenAI returned invalid intent: '{intent}'")
+
+        response["intent"] = intent
+        return response
 
         ####################################################
-        # GENERAL QUESTION
+        # GENERAL
         ####################################################
 
         if intent == "GENERAL":
@@ -75,12 +77,61 @@ class PromptParserService:
             }
 
         ####################################################
+        # Candidate Actions
+        ####################################################
+
+        if intent in [
+            "SHORTLIST",
+            "REJECT",
+            "UNDO_SHORTLIST",
+            "UNDO_REJECT",
+        ]:
+
+            candidate_name = response.get(
+                "candidate_name",
+                "",
+            )  
+
+            if not candidate_name:
+
+                raise ValueError(
+                    "Candidate name is required."
+                )
+
+            return {
+
+                "intent": intent,
+
+                "candidate_name": candidate_name,
+
+            }
+
+        ####################################################
+        # Show Candidate Lists
+        ####################################################
+
+        if intent in [
+
+            "SHOW_SHORTLISTED",
+
+            "SHOW_REJECTED",
+
+        ]:
+
+            return {
+
+                "intent": intent,
+
+            }
+
+        ####################################################
         # SEARCH
         ####################################################
 
         job = response.get("job")
 
         if not isinstance(job, dict):
+
             raise ValueError(
                 "SEARCH intent requires a job object."
             )
@@ -91,8 +142,11 @@ class PromptParserService:
         logger.info(job)
 
         return {
+
             "intent": "SEARCH",
-            "job": job
+
+            "job": job,
+
         }
 
     def _normalize(self, job: dict):

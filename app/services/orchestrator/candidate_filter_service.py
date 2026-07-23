@@ -1,5 +1,6 @@
 from typing import List, Dict
 import re
+from app.config.logging import logger
 
 
 class CandidateFilterService:
@@ -21,21 +22,27 @@ class CandidateFilterService:
         job: Dict,
     ) -> List[Dict]:
 
-        filtered = candidates
+        logger.info(f"Initial candidates: {len(candidates)}")
 
-        filtered = self.filter_by_experience(filtered, job)
+        candidates = self.filter_by_experience(candidates, job)
+        logger.info(f"After experience: {len(candidates)}")
 
-        filtered = self.filter_by_job_title(filtered, job)
+        candidates = self.filter_by_job_title(candidates, job)
+        logger.info(f"After title: {len(candidates)}")
 
-        filtered = self.filter_by_skills(filtered, job)
+        candidates = self.filter_by_skills(candidates, job)
+        logger.info(f"After skills: {len(candidates)}")
 
-        filtered = self.filter_by_location(filtered, job)
+        candidates = self.filter_by_location(candidates, job)
+        logger.info(f"After location: {len(candidates)}")
 
-        filtered = self.filter_by_education(filtered, job)
+        candidates = self.filter_by_education(candidates, job)
+        logger.info(f"After education: {len(candidates)}")
 
-        filtered = self.filter_by_excluded_skills(filtered, job)
+        candidates = self.filter_by_excluded_skills(candidates, job)
+        logger.info(f"After excluded skills: {len(candidates)}")
 
-        return filtered
+        return candidates
 
 
     def filter_by_experience(
@@ -43,7 +50,6 @@ class CandidateFilterService:
         candidates,
         job,
     ):
-
         experience = job.get("experience", {})
 
         if not isinstance(experience, dict):
@@ -56,7 +62,6 @@ class CandidateFilterService:
             return candidates
 
         results = []
-
         for candidate in candidates:
 
             years = float(
@@ -68,25 +73,26 @@ class CandidateFilterService:
 
             # Exact experience (e.g. 4 years)
             if minimum is not None and maximum is not None:
-
                 if years == minimum:
                     results.append(candidate)
 
             # Minimum only (e.g. minimum 4 years / 4+ years)
             elif minimum is not None:
-
                 if years >= minimum:
                     results.append(candidate)
 
             # Maximum only (e.g. less than 4 years)
             elif maximum is not None:
-
                 if years <= maximum:
                     results.append(candidate)
 
         return results
 
-    def filter_by_job_title(self, candidates, job):
+    def filter_by_job_title(
+        self,
+        candidates,
+        job,
+    ):
 
         title = job.get("title", "").lower().strip()
 
@@ -95,20 +101,20 @@ class CandidateFilterService:
 
         results = []
 
-        for c in candidates:
+        for candidate in candidates:
 
             designation = str(
-                c.get("designation", "")
+                candidate.get("designation", "")
             ).lower()
 
             position = str(
-                c.get("job_position", "")
+                candidate.get("job_position", "")
             ).lower()
 
             if title in designation or title in position:
-                results.append(c)
+                results.append(candidate)
 
-        return results if results else candidates
+        return results
     
 
     def normalize_skill(
@@ -173,10 +179,14 @@ class CandidateFilterService:
             ):
                 results.append(candidate)
 
-        return results if results else candidates
+        return results
 
 
-    def filter_by_location(self, candidates, job):
+    def filter_by_location(
+        self,
+        candidates,
+        job,
+    ):
 
         location = job.get("location", "")
 
@@ -186,14 +196,14 @@ class CandidateFilterService:
         location = location.lower()
 
         results = [
-            c
-            for c in candidates
+            candidate
+            for candidate in candidates
             if location in str(
-                c.get("location", "")
+                candidate.get("location", "")
             ).lower()
         ]
 
-        return results if results else candidates
+        return results
 
 
     def filter_by_education(self, candidates, job):
@@ -216,7 +226,7 @@ class CandidateFilterService:
             if education in edu:
                 results.append(c)
 
-        return results if results else candidates
+        return results
 
 
     def filter_by_excluded_skills(
@@ -265,4 +275,4 @@ class CandidateFilterService:
             if not has_excluded_skill:
                 results.append(candidate)
 
-        return results if results else candidates
+        return results 

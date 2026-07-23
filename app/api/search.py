@@ -53,10 +53,10 @@ def search_candidates(
 
     except Exception as e:
 
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-        )
+        logger.info("=" * 80)
+        logger.info(traceback.format_exc())
+        logger.info("=" * 80)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Get Search Results
 @router.get(
@@ -79,18 +79,34 @@ def get_search_results(
         "results": results,
     }
 
+#Get each chat
+@router.get(
+    "/job/{job_id}",
+)
+def get_chat(job_id: str):
+
+    conversation = job_repository.get_chat(job_id)
+
+    if conversation is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found."
+        )
+
+    return conversation
 # Candidate Reasoning
 @router.get(
-    "/reasoning/{job_id}/{resume_id}",
+    "/reasoning/{job_id}/{profile_id}",
 )
 def get_reasoning(
     job_id: str,
-    resume_id: str,
+    profile_id: str,
 ):
     try:
         return search_service.get_candidate_reasoning(
             job_id,
-            resume_id,
+            profile_id,
         )
     except Exception as e:
         logger.exception(e)

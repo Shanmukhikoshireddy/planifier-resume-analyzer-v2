@@ -5,7 +5,16 @@ Your first responsibility is to determine whether the user's input is:
 
 1. SEARCH
 2. GENERAL
-
+3. SHORTLIST
+4. REJECT
+5. SHOW_SHORTLISTED
+6. SHOW_REJECTED
+7. UNDO_SHORTLIST
+8. UNDO_REJECT
+9. CANDIDATE_REASONING
+10. SEARCH_HISTORY
+11. SEARCH_MODIFICATION
+12. RESET_SEARCH
 
 SEARCH
 
@@ -27,7 +36,6 @@ Return:
 
 {
     "intent":"SEARCH",
-
     "job":{
 
         "title":"",
@@ -63,28 +71,68 @@ Return:
         "keywords":[]
     }
 }
+########################################################
+CANDIDATE_REASONING
+########################################################
 
+Use this intent whenever the recruiter asks WHY a
+specific candidate matches the job or wants an
+explanation about a candidate.
+
+Examples
+
+Why is Alex a good match?
+
+Why Alex ranked first?
+
+Why Alex ranked good?
+
+Why is Rahul recommended?
+
+Explain Alex.
+
+Explain Rahul.
+
+Give reasoning for Alex.
+
+Why should I hire Alex?
+
+Why did Alex get this score?
+
+Why is Alex better than others?
+
+Why is Alex selected?
+
+Reasoning for Alex.
+
+Output
+
+{
+    "intent":"CANDIDATE_REASONING",
+    "candidate_name":"Alex"
+}
 
 GENERAL
 
-If the user is asking about:
+Use when the recruiter is asking a general
+recruitment question that is NOT about a specific
+candidate.
 
-- Existing candidates
-- Previously searched candidates
-- Ranking
-- Recommendation
-- Comparison
-- ATS score
-- Resume summary
-- Skill comparison
-- Certifications
-- Projects
-- Experience
-- Any conversational recruiter question
+Examples
 
-DO NOT attempt to extract a Job Description.
+What is AI?
 
-Return ONLY:
+How ATS works?
+
+Explain MongoDB.
+
+Difference between Python and Java.
+
+How does vector search work?
+
+What is RAG?
+
+Output
 
 {
     "intent":"GENERAL"
@@ -92,9 +140,7 @@ Return ONLY:
 
 
 SEARCH Extraction Rules
-
 Extract structured hiring requirements from any hiring request, recruiter query, job description, conversational search, or search refinement.
-
 Examples:
 
 Need Python developers with FastAPI.
@@ -171,7 +217,6 @@ Return:
     "max": 6
 }
 Required Skill Format
-
 Each required skill must be:
 
 {
@@ -288,6 +333,103 @@ Examples
     }
 ]
 
+SHORTLIST
+
+If the recruiter wants to shortlist a candidate.
+
+Examples
+
+- Shortlist Rahul
+- Please shortlist Anjali
+- Add Rahul to shortlisted candidates
+- Move Rahul to shortlist
+
+Return ONLY:
+
+{
+    "intent": "SHORTLIST",
+    "candidate_name": ""
+}
+
+
+REJECT
+
+If the recruiter wants to reject a candidate.
+
+Examples
+
+- Reject Rahul
+- Reject Anjali
+- Remove Rahul from consideration
+
+Return ONLY:
+
+{
+    "intent": "REJECT",
+    "candidate_name": ""
+}
+
+
+SHOW_SHORTLISTED
+
+If the recruiter wants to view shortlisted candidates.
+
+Examples
+
+- Show shortlisted candidates
+- Show my shortlisted profiles
+- List shortlisted candidates
+- Who have I shortlisted?
+
+Return ONLY:
+
+{
+    "intent": "SHOW_SHORTLISTED"
+}
+
+
+SHOW_REJECTED
+
+If the recruiter wants to view rejected candidates.
+
+Examples
+
+- Show rejected candidates
+- List rejected candidates
+- Who did I reject?
+- Show rejected profiles
+
+Return ONLY:
+
+{
+    "intent": "SHOW_REJECTED"
+}
+UNDO_SHORTLIST
+Use when the recruiter wants to remove a candidate from the shortlisted list.
+
+Examples:
+- Undo shortlist Alex
+- Remove Alex from shortlist
+- Unshortlist Alex
+- Restore Alex from shortlist
+
+Output:
+{
+    "intent": "UNDO_SHORTLIST",
+    "candidate_name": "Alex"
+}
+Intent: UNDO_REJECT
+
+Examples:
+- Undo reject Alex
+- Remove Alex from rejected list
+- Restore rejected candidate Alex
+
+Output:
+{
+  "intent": "UNDO_REJECT",
+  "candidate_name": "Alex"
+}
 Return ONLY valid JSON.
 
 Never return markdown.
@@ -297,21 +439,41 @@ Never explain your answer.
 USER_PROMPT = """
 Analyse the following recruiter input.
 
-Determine whether it is:
+Determine the user's intent.
+
+Possible intents
 
 SEARCH
 
-or
-
 GENERAL
+
+SHORTLIST
+
+REJECT
+
+SHOW_SHORTLISTED
+
+SHOW_REJECTED
+
+UNDO_SHORTLIST
+
+UNDO_REJECT
+
+CANDIDATE_REASONING
+
+SEARCH_HISTORY
+
+SEARCH_MODIFICATION
+
+RESET_SEARCH
 
 Return ONLY valid JSON.
 
 Recruiter Input
 
-{job_description}
+{prompt}
 """
-def build_job_prompt(job_description: str):
+def build_job_prompt(prompt: str):
 
     return [
         {
@@ -321,7 +483,7 @@ def build_job_prompt(job_description: str):
         {
             "role": "user",
             "content": USER_PROMPT.format(
-                job_description=job_description
+                prompt=prompt
             ),
         },
     ]
