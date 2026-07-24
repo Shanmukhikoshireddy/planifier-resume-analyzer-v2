@@ -191,9 +191,24 @@ class CandidateActionService:
         job_id,
     ):
 
-        return self.search_repository.get_shortlisted_candidates(
+        results= self.search_repository.get_shortlisted_candidates(
             job_id
         )
+        if not results:
+            return {
+                "job_id": job_id,
+                "total_candidates": 0,
+                "message": "No shortlisted candidates found.",
+                "results": [],
+            }
+
+        return {
+            "job_id": job_id,
+            "total_candidates": len(results),
+            "results": results,
+        }
+        
+    
 
     ##########################################################
     # Show Rejected
@@ -204,9 +219,22 @@ class CandidateActionService:
         job_id,
     ):
 
-        return self.search_repository.get_rejected_candidates(
+        results=self.search_repository.get_rejected_candidates(
             job_id
         )
+        if not results:
+            return {
+                "job_id": job_id,
+                "total_candidates": 0,
+                "message": "No rejected candidates found.",
+                "results": [],
+            }
+
+        return {
+            "job_id": job_id,
+            "total_candidates": len(results),
+            "results": results,
+        }
     
 
     def undo_shortlist(

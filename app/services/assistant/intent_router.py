@@ -1,6 +1,4 @@
 from app.config.logging import logger
-
-
 class IntentRouter:
 
     def route(
@@ -14,9 +12,7 @@ class IntentRouter:
         page_size: int,
     ):
 
-        # ------------------------------------------------------------------
         # Override SEARCH -> SEARCH_MODIFICATION when a search already exists
-        # ------------------------------------------------------------------
 
         if intent == "SEARCH":
 
@@ -33,7 +29,7 @@ class IntentRouter:
                     "clear search",
                     "fresh search",
                 ]
-
+  
                 is_explicit_new_search = any(
                     keyword in prompt
                     for keyword in new_search_keywords

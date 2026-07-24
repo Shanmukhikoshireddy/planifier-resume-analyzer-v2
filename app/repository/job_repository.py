@@ -494,26 +494,19 @@ class JobRepository(BaseRepository):
     def update_latest_search(
         self,
         conversation_job_id: str,
-        latest_search_job_id: str,
+        conversation_message_id: str,
     ):
 
         self.collection.update_one(
-
             {
                 "_id": ObjectId(conversation_job_id)
             },
-
             {
                 "$set": {
-
-                    "conversation.latest_search_id": latest_search_job_id,
-
+                    "conversation.latest_search_id": conversation_message_id,
                     "updated_at": datetime.utcnow(),
-
                 }
-
             }
-
         )
 
 
@@ -562,3 +555,26 @@ class JobRepository(BaseRepository):
         result = self.collection.insert_one(document)
 
         return str(result.inserted_id)
+    
+
+    def get_latest_search_id(
+        self,
+        job_id: str,
+    ):
+
+        document = self.collection.find_one(
+            {
+                "_id": ObjectId(job_id)
+            },
+            {
+                "conversation.latest_search_id": 1,
+            }
+        )
+
+        if not document:
+            return None
+
+        return (
+            document.get("conversation", {})
+            .get("latest_search_id")
+        )

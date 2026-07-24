@@ -11,7 +11,7 @@ candidate_action_service = CandidateActionService()
 
 # Shortlist Candidate
 @router.post(
-    "/jd/{job_id}/shortlist/{profile_id}",
+    "/jod/{job_id}/profile/{profile_id}",
 )
 def shortlist_candidate(
     job_id: str,
@@ -35,7 +35,7 @@ def shortlist_candidate(
 
 # Reject Candidate
 @router.post(
-    "/reject/{job_id}/{profile_id}",
+    "/job/{job_id}/profile/{profile_id}",
 )
 def reject_candidate(
     job_id: str,
@@ -59,7 +59,7 @@ def reject_candidate(
 
 # Get Shortlisted Candidates
 @router.get(
-    "/shortlisted/{job_id}",
+    "/shortlisted/job/{job_id}",
 )
 def shortlisted_candidates(
     job_id: str,
@@ -71,10 +71,12 @@ def shortlisted_candidates(
             status_code=500,
             detail=str(e),
         )
+    
+    
 
 # Get Rejected Candidates
 @router.get(
-    "/rejected/{job_id}",
+    "/rejected/job/{job_id}",
 )
 def rejected_candidates(
     job_id: str,
@@ -89,7 +91,7 @@ def rejected_candidates(
     
 
 @router.post(
-    "/unshortlist/{job_id}/{profile_id}",
+    "/unshortlist/job/{job_id}/profile/{profile_id}",
 )
 def unshortlist_candidate(
     job_id: str,
@@ -113,7 +115,7 @@ def unshortlist_candidate(
     
 
 @router.post(
-    "/unreject/{job_id}/{profile_id}",
+    "/unreject/job/{job_id}/profile/{profile_id}",
 )
 def unreject_candidate(
     job_id: str,

@@ -3,6 +3,7 @@ from bson import ObjectId
 from app.repository.base_repository import BaseRepository
 import re
 from app.config.logging import logger
+from app.repository.job_repository import JobRepository
 
 class SearchRepository(BaseRepository):
     def __init__(self):
@@ -10,12 +11,15 @@ class SearchRepository(BaseRepository):
         self.collection = self.db[
             "search_results"
         ]
+        self.job_repository = JobRepository()
+        
 
     # Save Search Results
     def save_search_results(
         self,
         job_id: str,
         candidates: list,
+        conversation_message_id=None,
     ):
         documents = []
 
@@ -24,6 +28,7 @@ class SearchRepository(BaseRepository):
             documents.append(
                 {
                     "job_id": job_id,
+                    "conversation_message_id": conversation_message_id,
 
                     "profile_id": candidate.get("profile_id"),
 
@@ -173,11 +178,25 @@ class SearchRepository(BaseRepository):
     def get_search_results(
         self,
         job_id: str,
+        conversation_message_id: str = None,
     ):
+        if conversation_message_id:
+            search_id = conversation_message_id
+        else:
+            search_id = self.job_repository.get_latest_search_id(job_id)
+
+        if not search_id:
+            return []
+
         return list(
             self.collection.find(
-                {"job_id": job_id},
-                {"_id": 0}
+                {
+                    "job_id": job_id,
+                    "conversation_message_id": search_id,
+                },
+                {
+                    "_id": 0,
+                },
             ).sort(
                 "final_score",
                 -1,
@@ -190,14 +209,21 @@ class SearchRepository(BaseRepository):
         job_id: str,
         profile_id: str,
     ):
-        
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
+        if not latest_search_id:
+            return None
+
         return self.collection.find_one(
-        {
-            "job_id": job_id,
-            "profile_id": profile_id,
-        },
-        {"_id": 0}
-    )
+            {
+                "job_id": job_id,
+                "conversation_message_id": latest_search_id,
+                "profile_id": profile_id,
+            },
+            {
+                "_id": 0,
+            },
+        )
 
     # Shortlist Candidate
     def shortlist_candidate(
@@ -205,9 +231,12 @@ class SearchRepository(BaseRepository):
         job_id: str,
         profile_id: str,
     ):
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
         self.collection.update_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "profile_id": profile_id,
             },
             {
@@ -215,7 +244,7 @@ class SearchRepository(BaseRepository):
                     "candidate_status": "SHORTLISTED",
                     "updated_at": datetime.utcnow(),
                 }
-            }
+            },
         )
 
     # Reject Candidate
@@ -224,9 +253,12 @@ class SearchRepository(BaseRepository):
         job_id: str,
         profile_id: str,
     ):
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
         self.collection.update_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "profile_id": profile_id,
             },
             {
@@ -234,19 +266,22 @@ class SearchRepository(BaseRepository):
                     "candidate_status": "REJECTED",
                     "updated_at": datetime.utcnow(),
                 }
-            }
+            },
         )
-    
+        
     # Save AI Reasoning
     def save_reasoning(
         self,
-        job_id: str,
-        profile_id: str,
-        reasoning: str,
+        job_id,
+        profile_id,
+        reasoning,
     ):
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
         self.collection.update_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "profile_id": profile_id,
             },
             {
@@ -256,25 +291,31 @@ class SearchRepository(BaseRepository):
                     "reasoning_generated_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow(),
                 }
-            }
+            },
         )
 
     # Get AI Reasoning
     def get_reasoning(
         self,
-        job_id: str,
-        profile_id: str,
+        job_id,
+        profile_id,
     ):
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
+        if not latest_search_id:
+            return None
+
         return self.collection.find_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "profile_id": profile_id,
             },
             {
                 "_id": 0,
                 "reasoning": 1,
                 "reasoning_generated": 1,
-            }
+            },
         )
 
     # Delete Search Results
@@ -291,8 +332,16 @@ class SearchRepository(BaseRepository):
         self,
         job_id: str,
     ):
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
+        if not latest_search_id:
+            return 0
+
         return self.collection.count_documents(
-            {"job_id": job_id}
+            {
+                "job_id": job_id,
+                "conversation_message_id": latest_search_id,
+            }
         )
     
     # Get Shortlisted Candidates
@@ -336,10 +385,15 @@ class SearchRepository(BaseRepository):
         job_id,
         candidate_name,
     ):
-        # First try exact match
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
+        if not latest_search_id:
+            return None
+
         candidate = self.collection.find_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "candidate_name": {
                     "$regex": f"^{re.escape(candidate_name)}$",
                     "$options": "i",
@@ -350,10 +404,10 @@ class SearchRepository(BaseRepository):
         if candidate:
             return candidate
 
-        # If no exact match, try partial match
         return self.collection.find_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "candidate_name": {
                     "$regex": re.escape(candidate_name),
                     "$options": "i",
@@ -366,9 +420,12 @@ class SearchRepository(BaseRepository):
         job_id,
         profile_id,
     ):
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+
         self.collection.update_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "profile_id": profile_id,
             },
             {
@@ -376,22 +433,21 @@ class SearchRepository(BaseRepository):
                     "candidate_status": "PENDING",
                     "updated_at": datetime.utcnow(),
                 }
-            }
+            },
         )
 
 
     def undo_reject(
         self,
-        job_id: str,
-        profile_id: str,
+        job_id,
+        profile_id,
     ):
-        logger.info(">>> SearchRepository.undo_reject")
-        logger.info(job_id)
-        logger.info(profile_id)
+        latest_search_id = self.job_repository.get_latest_search_id(job_id)
 
         self.collection.update_one(
             {
                 "job_id": job_id,
+                "conversation_message_id": latest_search_id,
                 "profile_id": profile_id,
             },
             {
@@ -399,5 +455,28 @@ class SearchRepository(BaseRepository):
                     "candidate_status": "PENDING",
                     "updated_at": datetime.utcnow(),
                 }
-            }
+            },
+        )
+
+
+    
+
+
+    # Get Search Results By Conversation Message
+    def get_results_by_conversation_message(
+        self,
+        conversation_message_id: str,
+    ):
+        return list(
+            self.collection.find(
+                {
+                    "conversation_message_id": conversation_message_id,
+                },
+                {
+                    "_id": 0,
+                },
+            ).sort(
+                "final_score",
+                -1,
+            )
         )

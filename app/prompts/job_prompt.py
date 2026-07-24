@@ -15,7 +15,7 @@ Your first responsibility is to determine whether the user's input is:
 10. SEARCH_HISTORY
 11. SEARCH_MODIFICATION
 12. RESET_SEARCH
-
+ 
 SEARCH
 
 If the user is describing:
@@ -131,7 +131,7 @@ Difference between Python and Java.
 How does vector search work?
 
 What is RAG?
-
+ 
 Output
 
 {

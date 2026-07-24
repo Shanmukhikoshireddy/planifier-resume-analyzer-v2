@@ -275,15 +275,15 @@ class ConversationService:
     def update_latest_search(
         self,
         conversation: dict,
-        job_id: str,
+        conversation_message_id: str,
     ):
 
-        conversation["latest_search_id"] = job_id
+        conversation["latest_search_id"] = conversation_message_id
+
         self.save(
             conversation["job_id"],
             conversation,
         )
-
 
         return conversation
 

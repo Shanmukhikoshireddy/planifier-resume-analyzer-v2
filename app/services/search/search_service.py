@@ -52,12 +52,14 @@ class SearchService:
         search_context: dict,
         page: int,
         page_size: int,
+        conversation_message_id: str,
     ):
 
         return self.search(
             search_context=search_context,
             page=page,
             page_size=page_size,
+            conversation_message_id=conversation_message_id,
         )
 ######
     # Search Pipeline######
@@ -67,6 +69,7 @@ class SearchService:
         search_context: dict,
         page: int,
         page_size: int,
+        conversation_message_id: str,
     ):
 
         logger.info("=" * 80)
@@ -130,12 +133,11 @@ class SearchService:
             logger.info("CACHE HIT")
 
             results = self.search_repository.get_search_results(
-                str(cached_job["_id"])
+                job_id=job_id,
+                conversation_message_id=conversation_message_id,
             )
 
-            ################################################
             # Update Current Conversation Job
-            ################################################
 
             self.job_repository.update_job(
                 job_id=job_id,
@@ -209,6 +211,8 @@ class SearchService:
             page=page,
 
             page_size=page_size,
+
+            conversation_message_id=conversation_message_id,
 
         )
     
@@ -433,14 +437,15 @@ class SearchService:
 
     def vector_search(
         self,
-        job_id: str,
-        job: dict,
-        job_text: str,
-        job_embedding: list,
-        job_position: str,
-        received_within: str,
-        page: int,
-        page_size: int,
+        job_id,
+        job,
+        job_text,
+        job_embedding,
+        job_position,
+        received_within,
+        page,
+        page_size,
+        conversation_message_id,
     ):
 
         logger.info("=" * 80)
@@ -510,23 +515,15 @@ class SearchService:
                 "COMPLETED",
             )
 
-            return {
-
-                "job_id": job_id,
-
-                "cached": False,
-
-                "page": page,
-
-                "page_size": page_size,
-
-                "total_candidates": 0,
-
-                "total_pages": 0,
-
-                "results": [],
-
-            }
+            return self.rerank_candidates(
+                job_id=job_id,
+                job=job,
+                job_text=job_text,
+                candidates=candidates,
+                page=page,
+                page_size=page_size,
+                conversation_message_id=conversation_message_id,
+            )
 
 
         # Business Rule Filtering
@@ -595,32 +592,27 @@ class SearchService:
 
 
         return self.rerank_candidates(
-
-            job_id=job_id,
-
-            job=job,
-
-            job_text=job_text,
-
-            candidates=candidates,
-
-            page=page,
-
-            page_size=page_size,
-
-        )
+                job_id=job_id,
+                job=job,
+                job_text=job_text,
+                candidates=candidates,
+                page=page,
+                page_size=page_size,
+                conversation_message_id=conversation_message_id,
+            )
     
 ######
     # Rerank Candidates######
 
     def rerank_candidates(
         self,
-        job_id: str,
-        job: dict,
-        job_text: str,
-        candidates: list,
-        page: int,
-        page_size: int,
+        job_id,
+        job,
+        job_text,
+        candidates,
+        page,
+        page_size,
+        conversation_message_id,
     ):
 
         logger.info("=" * 80)
@@ -653,12 +645,9 @@ class SearchService:
                 [],
             )
 
-            ################################################
             # Future Optimization
-            ################################################
             # If resume_text is already generated during
             # ingestion, reuse it.
-            ################################################
 
             resume_text = candidate.get(
                 "resume_text"
@@ -736,6 +725,8 @@ Current Company
 
             page_size=page_size,
 
+            conversation_message_id=conversation_message_id,
+
         )
     
 
@@ -744,11 +735,12 @@ Current Company
 
     def score_candidates(
         self,
-        job_id: str,
-        job: dict,
-        candidates: list,
-        page: int,
-        page_size: int,
+        job_id,
+        job,
+        candidates,
+        page,
+        page_size,
+        conversation_message_id,
     ):
 
         logger.info("=" * 80)
@@ -770,9 +762,7 @@ Current Company
 
         for candidate in candidates:
 
-            ################################################
             # ATS Calculation
-            ################################################
 
             score = self.scoring_service.calculate_score(
 
@@ -782,9 +772,7 @@ Current Company
 
             )
 
-            ################################################
             # Update Candidate
-            ################################################
 
             candidate.update({
 
@@ -811,9 +799,7 @@ Current Company
 
             })
 
-            ################################################
             # Skill Match %
-            ################################################
 
             if total_required_skills:
 
@@ -839,9 +825,7 @@ Current Company
 
             )
 
-            ################################################
             # Match Level
-            ################################################
 
             final_score = candidate["final_score"]
 
@@ -946,6 +930,8 @@ Current Company
 
             page_size=page_size,
 
+            conversation_message_id=conversation_message_id,
+
         )
     
 ######
@@ -953,12 +939,13 @@ Current Company
 
     def generate_reasoning(
         self,
-        job_id: str,
-        candidates: list,
-        total_candidates: int,
-        total_pages: int,
-        page: int,
-        page_size: int,
+        job_id,
+        candidates,
+        total_candidates,
+        total_pages,
+        page,
+        page_size,
+        conversation_message_id,
     ):
 
         logger.info("=" * 80)
@@ -980,11 +967,9 @@ Current Company
 
 
         self.search_repository.save_search_results(
-
-            job_id,
-
-            candidates,
-
+            job_id=job_id,
+            candidates=candidates,
+            conversation_message_id=conversation_message_id,
         )
 
 

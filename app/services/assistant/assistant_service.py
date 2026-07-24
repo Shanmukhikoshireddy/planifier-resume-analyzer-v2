@@ -9,6 +9,8 @@ from app.services.orchestrator.prompt_parser_service import (
     PromptParserService,
 )
 from app.services.candidate.candidate_action_service import CandidateActionService
+from app.repository.conversation_message_repository import ConversationMessageRepository
+from app.repository.search_repository import SearchRepository
 
 class AssistantService:
 
@@ -26,6 +28,8 @@ class AssistantService:
 
         self.intent_router = IntentRouter()
         self.candidate_action_service = CandidateActionService()
+        self.conversation_message_repository = ConversationMessageRepository()
+        self.search_repository = SearchRepository()
 
     # Main Entry
 
@@ -57,6 +61,15 @@ class AssistantService:
         parsed = self.prompt_parser.parse(
             request.prompt,
         )
+        conversation_message_id = (
+            self.conversation_message_repository.create_message(
+                conversation_id=conversation["job_id"],
+                user_prompt=request.prompt,
+                intent=parsed["intent"],
+            )
+        )
+
+        conversation["conversation_message_id"] = conversation_message_id
 
         # Store User Message
 
@@ -121,15 +134,10 @@ class AssistantService:
     ):
 
         search_context = self.build_search_context(
-
             conversation,
-
             merged_job,
-
             request,
-
             is_new_search,
-
         )
 
         response = self.search_service.execute(
@@ -139,16 +147,25 @@ class AssistantService:
             page,
 
             page_size,
+            conversation["conversation_message_id"],
 
+        )
+        self.conversation_message_repository.update_message(
+            message_id=conversation["conversation_message_id"],
+            assistant_message={
+                "type": message_type,
+                "total_candidates": response["total_candidates"],
+            },
         )
 
         self.conversation_service.update_latest_search(
 
             conversation,
 
-            response["job_id"],
+            conversation["conversation_message_id"],
 
         )
+        
 
         self.conversation_service.add_assistant_message(
 
@@ -603,4 +620,38 @@ class AssistantService:
         )
 
         return response
-    
+    def get_conversation_history(
+        self,
+        job_id: str,
+    ):
+
+        messages = (
+            self.conversation_message_repository.get_messages(
+                job_id,
+            )
+        )
+
+        history = []
+
+        for message in messages:
+
+            candidates = (
+                self.search_repository.get_results_by_conversation_message(
+                    message["_id"],
+                )
+            )
+
+            history.append(
+                {
+                    "conversation_message_id": message["_id"],
+                    "user_prompt": message["user_prompt"],
+                    "intent": message["intent"],
+                    "assistant_message": message["assistant_message"],
+                    "candidates": candidates,
+                }
+            )
+
+        return {
+            "job_id": job_id,
+            "history": history,
+        }

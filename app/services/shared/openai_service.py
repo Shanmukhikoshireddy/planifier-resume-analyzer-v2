@@ -23,7 +23,7 @@ class OpenAIService:
                 try:
                     logger.info(type(messages))
                     logger.info(messages)
-                    
+
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,

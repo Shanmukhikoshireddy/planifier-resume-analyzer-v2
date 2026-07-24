@@ -8,6 +8,7 @@ from app.config.logging import logger
 from app.repository.search_repository import SearchRepository
 from app.repository.job_repository import JobRepository
 from app.services.assistant.assistant_service import AssistantService
+from typing import Optional
 
 router = APIRouter(
     prefix="/api/cv-service/search",
@@ -60,21 +61,26 @@ def search_candidates(
 
 # Get Search Results
 @router.get(
-    "/job/{job_id}/all",
+    "/job/{job_id}/conversation/{conversation_id}",
 )
 def get_search_results(
     job_id: str,
+    conversation_message_id: Optional[str] = None,
 ):
     results = search_repository.get_search_results(
-        job_id
+        job_id=job_id,
+        conversation_message_id=conversation_message_id,
     )
+
     if len(results) == 0:
         raise HTTPException(
             status_code=404,
             detail="Search Results Not Found.",
         )
+
     return {
         "job_id": job_id,
+        "conversation_message_id": conversation_message_id,
         "total_candidates": len(results),
         "results": results,
     }
@@ -97,7 +103,7 @@ def get_chat(job_id: str):
     return conversation
 # Candidate Reasoning
 @router.get(
-    "/reasoning/{job_id}/{profile_id}",
+    "/job/{job_id}/profile/{profile_id}",
 )
 def get_reasoning(
     job_id: str,
@@ -117,3 +123,15 @@ def get_reasoning(
         )
 
 
+@router.get(
+    "/job/{job_id}",
+)
+def get_conversation(
+    job_id: str,
+):
+
+    assistant = AssistantService()
+
+    return assistant.get_conversation_history(
+        job_id,
+    )
