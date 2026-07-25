@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     MONGODB_URI: str
     MONGODB_DATABASE: str
 
+    MONGODB_AI_URI: str
+    MONGODB_AI_DATABASE: str
     # MinIO
     MINIO_ENDPOINT: str
     MINIO_ACCESS_KEY: str
