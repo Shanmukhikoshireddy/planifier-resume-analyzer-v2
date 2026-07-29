@@ -1,114 +1,110 @@
 import time
+
 from app.config.logging import logger
 from app.config.settings import settings
-from app.repository.metadata_repository import MetadataRepository
-from app.repository.minio_repository import MinioRepository
 from app.workers.resume_processor import ResumeProcessor
+from app.repository.applicant_repository import ApplicantRepository
+
 
 class MinioScheduler:
+
     def __init__(self):
-        self.minio_repository = MinioRepository()
-        self.metadata_repository = MetadataRepository()
         self.resume_processor = ResumeProcessor()
+        self.applicant_repository = ApplicantRepository()
         self.interval = settings.SCHEDULER_INTERVAL
 
     # Scheduler Loop
     def run(self):
-        logger.info("MINIO SCHEDULER STARTED")
+        logger.info("APPLICANT SCHEDULER STARTED")
+
         while True:
             try:
                 self.scan_bucket()
             except Exception as e:
                 logger.exception(e)
+
             time.sleep(self.interval)
 
-    # Scan Bucket
+    # Scan Applicants
     def scan_bucket(self):
-        logger.info("Scanning MinIO bucket...")
-        objects = self.minio_repository.list_objects()
-        for obj in objects:
-            object_path = obj.object_name
+        logger.info("Scanning Applicants...")
 
-            # Skip folders
-            if object_path.endswith("/"):
-                continue
+        applicants = self.applicant_repository.get_pending_applicants()
+        logger.info(f"Applicants found: {len(applicants)}")
 
-            SUPPORTED_EXTENSIONS = {
-                ".pdf",
-                ".doc",
-                ".docx",
-                ".xls",
-                ".xlsx",
-            }
+        for applicant in applicants:
 
-            extension = "." + object_path.lower().split(".")[-1]
+            applicant_id = str(applicant["_id"])
+            logger.info(f"Applicant ID: {applicant_id}")
 
-            if extension not in SUPPORTED_EXTENSIONS:
-                logger.info(f"Unsupported file : {object_path}")
-                continue
-
-            # Already processed?
-            if self.metadata_repository.is_processed(
-                object_path
-            ):
-                logger.info(f"Already Processed : {object_path}")
-                continue
-
-            logger.info(f"New Resume Found : {object_path}")
-            self.process_resume(object_path)
-
-    # Process Resume
-    def process_resume(
-        self,
-        object_path: str,
-    ):
-        logger.info(f"Processing : {object_path}")
-        try:
-            # Mark Processing
-            self.metadata_repository.mark_processing(
-                object_path
+            self.applicant_repository.update_ai_sync_status(
+                applicant_id,
+                "PROCESSING",
             )
 
-            # Process Resume
-            result = self.resume_processor.process_resume(
-                object_path=object_path
-            )
+            try:
+                # Resume URL
+                resume_url = applicant.get("resumeUrl")
 
-            # Duplicate Resume
-            if result == "DUPLICATE":
-                logger.info(
-                    f"Duplicate Resume : {object_path}"
-                )
-                self.metadata_repository.save_metadata(
-                    object_path=object_path,
-                    file_hash="",
-                    status="SUCCESS",
-                )
-                return
+                if not resume_url:
+                    logger.error(
+                        f"No resumeUrl found for applicant {applicant_id}"
+                    )
 
-            # Processing Failed
-            if not result:
-                logger.warning(
-                    f"Resume Processing Failed : {object_path}")
-                self.metadata_repository.update_status(
-                    object_path,
+                    self.applicant_repository.update_ai_sync_status(
+                        applicant_id,
+                        "FAILED",
+                    )
+                    continue
+
+                # Job Position DBRef
+                job_ref = applicant.get("jobPosition")
+
+                if not job_ref:
+                    logger.error(
+                        f"No jobPosition found for applicant {applicant_id}"
+                    )
+
+                    self.applicant_repository.update_ai_sync_status(
+                        applicant_id,
+                        "FAILED",
+                    )
+                    continue
+
+                # Extract ObjectId from DBRef
+                job_id = str(job_ref.id)
+
+                logger.info(f"Job ID : {job_id}")
+
+                result = self.resume_processor.process_resume(
+                    resume_url=resume_url,
+                    job_id=job_id,
+                    applicant_id=str(applicant["_id"]),
+                )
+
+                if result == "DUPLICATE":
+                    self.applicant_repository.update_ai_sync_status(
+                        applicant_id,
+                        "COMPLETED",
+                    )
+                    continue
+
+                if not result:
+                    self.applicant_repository.update_ai_sync_status(
+                        applicant_id,
+                        "FAILED",
+                    )
+                    continue
+
+                self.applicant_repository.update_ai_sync_status(
+                    applicant_id,
+                    "COMPLETED",
+                )
+
+            except Exception as e:
+                logger.exception(e)
+
+                self.applicant_repository.update_ai_sync_status(
+                    applicant_id,
                     "FAILED",
                 )
-                return
-
-            # Processing Successful
-            self.metadata_repository.save_metadata(
-                object_path=object_path,
-                file_hash=result,
-                status="SUCCESS",
-            )
-            logger.info(
-                f"Resume Processed Successfully : {object_path}"
-            )
-
-        except Exception as e:
-            logger.exception(e)
-            self.metadata_repository.update_status(
-                object_path,
-                "FAILED",
-            ) 

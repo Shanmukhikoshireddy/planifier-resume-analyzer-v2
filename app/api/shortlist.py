@@ -11,16 +11,16 @@ candidate_action_service = CandidateActionService()
 
 # Shortlist Candidate
 @router.post(
-    "/jod/{job_id}/profile/{profile_id}",
+    "/jod/{search_id}/profile/{profile_id}",
 )
 def shortlist_candidate(
-    job_id: str,
+    search_id: str,
     profile_id: str,
 ):
     try:
 
         response = candidate_action_service.shortlist_by_profile_id(
-            job_id=job_id,
+            search_id=search_id,
             profile_id=profile_id,
         )
 
@@ -35,16 +35,16 @@ def shortlist_candidate(
 
 # Reject Candidate
 @router.post(
-    "/job/{job_id}/profile/{profile_id}",
+    "/job/{search_id}/profile/{profile_id}",
 )
 def reject_candidate(
-    job_id: str,
+    search_id: str,
     profile_id: str,
 ):
     try:
 
         response = candidate_action_service.reject_by_profile_id(
-            job_id=job_id,
+            search_id=search_id,
             profile_id=profile_id,
         )
 
@@ -59,13 +59,13 @@ def reject_candidate(
 
 # Get Shortlisted Candidates
 @router.get(
-    "/shortlisted/job/{job_id}",
+    "/shortlisted/job/{search_id}",
 )
 def shortlisted_candidates(
-    job_id: str,
+    search_id: str,
 ):
     try:
-        return candidate_action_service.shortlisted(job_id)
+        return candidate_action_service.shortlisted(search_id)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -76,13 +76,13 @@ def shortlisted_candidates(
 
 # Get Rejected Candidates
 @router.get(
-    "/rejected/job/{job_id}",
+    "/rejected/job/{search_id}",
 )
 def rejected_candidates(
-    job_id: str,
+    search_id: str,
 ):
     try:
-        return candidate_action_service.rejected(job_id)
+        return candidate_action_service.rejected(search_id)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -91,16 +91,16 @@ def rejected_candidates(
     
 
 @router.post(
-    "/unshortlist/job/{job_id}/profile/{profile_id}",
+    "/unshortlist/job/{search_id}/profile/{profile_id}",
 )
 def unshortlist_candidate(
-    job_id: str,
+    search_id: str,
     profile_id: str,
 ):
     try:
 
         response = candidate_action_service.undo_shortlist_by_profile_id(
-            job_id=job_id,
+            search_id=search_id,
             profile_id=profile_id,
         )
 
@@ -115,16 +115,16 @@ def unshortlist_candidate(
     
 
 @router.post(
-    "/unreject/job/{job_id}/profile/{profile_id}",
+    "/unreject/job/{search_id}/profile/{profile_id}",
 )
 def unreject_candidate(
-    job_id: str,
+    search_id: str,
     profile_id: str,
 ):
     try:
 
         response = candidate_action_service.undo_reject_by_profile_id(
-            job_id=job_id,
+            search_id=search_id,
             profile_id=profile_id,
         )
 

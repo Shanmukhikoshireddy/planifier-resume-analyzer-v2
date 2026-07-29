@@ -1,4 +1,4 @@
-from app.repository.job_repository import JobRepository
+from app.repository.search_repository import SearchRepository
 
 class CacheService:
     """
@@ -9,7 +9,7 @@ class CacheService:
     been processed.
     """
     def __init__(self):
-        self.job_repository = JobRepository()
+        self.search_repository = SearchRepository()
 
     # Find Similar Job
     def find_similar_job(
@@ -18,7 +18,7 @@ class CacheService:
         job_position: str,
         threshold: float = 0.95,
     ):
-        return self.job_repository.find_similar_job(
+        return self.search_repository.find_similar_job(
             embedding=embedding,
             job_position=job_position,
             threshold=threshold,
@@ -50,6 +50,6 @@ class CacheService:
     # Mark Cached
     def mark_cached(
         self,
-        job_id: str,
+        search_id: str,
     ):
-        self.job_repository.mark_as_cached(job_id)
+        self.search_repository.mark_as_cached(search_id)

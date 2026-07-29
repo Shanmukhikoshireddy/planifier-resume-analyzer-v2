@@ -1,0 +1,71 @@
+from bson import ObjectId
+
+from app.repository.base_repository import BaseRepository
+from app.config.logging import logger
+from app.config.mongo import planifier_db
+class ApplicantRepository:
+    def __init__(self):
+
+        self.db = planifier_db
+        self.collection = self.db["applicants"]
+
+    # Get all pending applicants
+    def get_pending_applicants(self):
+        applicants = list(
+            self.collection.find(
+                {
+                    "AI_SYNC_STATUS": {
+                        "$in": ["PENDING", "FAILED"]
+                    }
+                }
+            )
+        )
+
+        logger.info(f"Fetched {len(applicants)} applicants")
+
+        return applicants
+
+    # Update AI sync status
+    def update_ai_sync_status(
+        self,
+        applicant_id: str,
+        status: str,
+    ):
+        self.collection.update_one(
+            {
+                "_id": ObjectId(applicant_id),
+            },
+            {
+                "$set": {
+                    "AI_SYNC_STATUS": status,
+                }
+            },
+        )
+
+
+    def get_applicant(
+        self,
+        applicant_id: str,
+    ):
+        applicant = self.collection.find_one(
+            {
+                "_id": ObjectId(applicant_id)
+            }
+        )
+
+        if not applicant:
+            return None
+
+        applicant["applicant_id"] = str(applicant["_id"])
+        del applicant["_id"]
+
+        return applicant
+
+    def get_all_applicants(self):
+        applicants = list(self.collection.find())
+
+        for applicant in applicants:
+            applicant["applicant_id"] = str(applicant["_id"])
+            del applicant["_id"]
+
+        return applicants

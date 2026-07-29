@@ -1,13 +1,13 @@
 from copy import deepcopy
 
-from app.repository.job_repository import JobRepository
+from app.repository.search_repository import SearchRepository
 from app.utils.context_merger import ContextMerger
 
 
 class ConversationService:
 
     def __init__(self):
-        self.job_repository = JobRepository()
+        self.search_repository = SearchRepository()
         self.context_merger = ContextMerger()
 
     ###########################################################
@@ -16,20 +16,20 @@ class ConversationService:
 
     def load(
         self,
-        job_id: str,
+        search_id: str,
     ):
 
-        if not job_id:
+        if not search_id:
             return None
 
-        conversation = self.job_repository.get_conversation(
-            job_id
+        conversation = self.search_repository.get_conversation(
+            search_id
         )
 
         if not conversation:
             return self.create()
 
-        conversation["job_id"] = job_id
+        conversation["search_id"] = search_id
 
         return conversation
 
@@ -41,15 +41,15 @@ class ConversationService:
         self,
     ):
 
-        job_id = self.job_repository.create_empty_job()
+        search_id = self.search_repository.create_empty_search()
 
         conversation = {
 
-            "job_id": job_id,
+            "search_id": search_id,
 
             "messages": [],
 
-            "current_job": {},
+            "current_search": {},
 
             "latest_search_id": None,
 
@@ -59,7 +59,7 @@ class ConversationService:
 
         self.save(
 
-            job_id,
+            search_id,
 
             conversation,
 
@@ -85,15 +85,15 @@ class ConversationService:
         # Current Search Context
         # --------------------------------------------------
 
-        current_job = conversation.get("current_job", {})
+        current_search = conversation.get("current_search", {})
 
-        if current_job:
+        if current_search:
 
             lines.append("Current Search Context:")
 
-            title = current_job.get("title", "")
-            location = current_job.get("location", "")
-            experience = current_job.get("experience", {})
+            title = current_search.get("title", "")
+            location = current_search.get("location", "")
+            experience = current_search.get("experience", {})
 
             if title:
                 lines.append(f"- Title: {title}")
@@ -106,7 +106,7 @@ class ConversationService:
                     f"- Experience: {experience}"
                 )
 
-            required = current_job.get(
+            required = current_search.get(
                 "required_skills",
                 [],
             )
@@ -191,25 +191,25 @@ class ConversationService:
     # Merge Parsed Job
     ###########################################################
 
-    def merge_job(
+    def merge_search(
         self,
         conversation: dict,
-        parsed_job: dict,
+        parsed_search: dict,
     ):
 
-        current_job = conversation.get(
-            "current_job",
+        current_search = conversation.get(
+            "current_search",
             {},
         )
 
         merged = self.context_merger.merge(
-            current_job,
-            parsed_job,
+            current_search,
+            parsed_search,
         )
 
-        conversation["current_job"] = merged
+        conversation["current_search"] = merged
         self.save(
-            conversation["job_id"],
+            conversation["search_id"],
             conversation,
         )
 
@@ -236,7 +236,7 @@ class ConversationService:
             }
         )
         self.save(
-            conversation["job_id"],
+            conversation["search_id"],
             conversation,
         )
         return conversation
@@ -261,7 +261,7 @@ class ConversationService:
             }
         )
         self.save(
-            conversation["job_id"],
+            conversation["search_id"],
             conversation,
         )
 
@@ -281,7 +281,7 @@ class ConversationService:
         conversation["latest_search_id"] = conversation_message_id
 
         self.save(
-            conversation["job_id"],
+            conversation["search_id"],
             conversation,
         )
 
@@ -293,11 +293,11 @@ class ConversationService:
 
     def save(
         self,
-        job_id: str,
+        search_id: str,
         conversation: dict,
     ):
 
-        self.job_repository.update_conversation(
-            job_id,
+        self.search_repository.update_conversation(
+            search_id,
             conversation,
         )

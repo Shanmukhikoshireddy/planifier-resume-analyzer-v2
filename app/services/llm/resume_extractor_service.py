@@ -2,6 +2,7 @@ import json
 from app.config.logging import logger
 from app.services.shared.openai_service import OpenAIService
 from app.prompts.resume_prompt import build_resume_prompt
+
 class ResumeExtractorService:
     """
     Responsible for extracting structured resume data

@@ -27,11 +27,11 @@ class CandidateFilterService:
         candidates = self.filter_by_experience(candidates, job)
         logger.info(f"After experience: {len(candidates)}")
 
-        candidates = self.filter_by_job_title(candidates, job)
-        logger.info(f"After title: {len(candidates)}")
+        # candidates = self.filter_by_job_title(candidates, job)
+        # logger.info(f"After title: {len(candidates)}")
 
-        candidates = self.filter_by_skills(candidates, job)
-        logger.info(f"After skills: {len(candidates)}")
+        # candidates = self.filter_by_skills(candidates, job)
+        # logger.info(f"After skills: {len(candidates)}")
 
         candidates = self.filter_by_location(candidates, job)
         logger.info(f"After location: {len(candidates)}")

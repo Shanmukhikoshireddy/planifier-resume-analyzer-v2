@@ -2,9 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from app.config.logging import logger
 from app.config.settings import settings
-from app.repository.minio_repository import MinioRepository
 from app.repository.profile_repository import ProfileRepository
-from app.repository.embedding_repository import EmbeddingRepository
 from app.services.ingestion.parser_service import ParserService
 from app.services.ingestion.embedding_service import EmbeddingService
 from app.services.ingestion.duplicate_service import DuplicateService
@@ -13,26 +11,38 @@ from app.utils.hash import generate_hash
 from app.services.shared.pdf_converter_service import (
     PdfConverterService,
 )
+from urllib.parse import urlparse
+import os
+import tempfile
+import requests
+from app.repository.applicant_repository import ApplicantRepository
+from app.repository.job_position_repository import JobPositionRepository
 class ResumeProcessor:
+
     def __init__(self):
-        self.minio_repository = MinioRepository()
+
         self.profile_repository = ProfileRepository()
-        self.embedding_repository = EmbeddingRepository()
+        self.job_position_repository = JobPositionRepository()
+
         self.parser_service = ParserService()
+
         self.embedding_service = EmbeddingService()
+
         self.duplicate_service = DuplicateService()
+
         self.resume_extractor = ResumeExtractorService()
+
         self.converter = PdfConverterService()
-
-
 
     # Process Resume
     def process_resume(
         self,
-        object_path: str,
-    ) -> str:
+        resume_url: str,
+        job_id: str,
+        applicant_id: str,
+    ):
         logger.info(
-            f"Processing Resume : {object_path}"
+            f"Processing Resume : {resume_url}"
         )
         local_resume = None
         file_hash = ""
@@ -40,7 +50,7 @@ class ResumeProcessor:
 
             # Download Resume
             local_resume = self._download_resume(
-            object_path
+            resume_url
             )
 
             pdf_resume = None
@@ -82,19 +92,22 @@ class ResumeProcessor:
             )
 
             # Derive Job Position From MinIO Folder
-            parts = Path(object_path).parts
-            if len(parts) >= 2:
-                job_position = parts[1]
-            else:
-                job_position = "Unknown"
+            # Get Job Position from job_positions collection
+            job = self.job_position_repository.get_job_position(job_id)
+
+            if not job:
+                raise ValueError(f"Job Position not found for Job ID: {job_id}")
+
+            job_position = job.get("title", "")
+
+            structured_resume["job_id"] = job_id
             structured_resume["job_position"] = job_position
-            logger.info(
-                f"Job Position : {job_position}"
-            )
+
+            logger.info(f"Job Position : {job_position}")
             structured_resume["file_hash"] = file_hash
             structured_resume["raw_text"] = raw_text
             structured_resume["file_name"] = Path(
-                object_path
+                resume_url
             ).name
         
             # Generate Embedding
@@ -103,64 +116,17 @@ class ResumeProcessor:
             )
 
             # Save Candidate Profile
-            resume_path = object_path
+            resume_path = resume_url
 
-            # DOCX uploaded
-            if pdf_resume:
-
-                resume_path = object_path.replace(
-                    ".docx",
-                    ".pdf",
-                )
-
-                with open(
-                    pdf_resume,
-                    "rb",
-                ) as file:
-
-                    self.minio_repository.upload_file(
-
-                        object_name=resume_path,
-
-                        data=file.read(),
-
-                        content_type="application/pdf",
-
-                    )
-
-                self.minio_repository.delete_file(
-                    object_path
-                )
-
-                logger.info(
-                    f"Deleted original DOCX : {object_path}"
-                )
-
-
-                logger.info(
-                    "PDF uploaded to MinIO."
-                )
             profile_id = self._save_profile(
-
                 resume=structured_resume,
-
                 resume_path=resume_path,
-
                 file_hash=file_hash,
-
-            )
-
-            # Save Embedding
-            self._save_embedding(
-                profile_id=profile_id,
                 embedding=embedding,
-                job_position=structured_resume.get(
-                    "job_position",
-                    "Unknown",
-                ),
+                applicant_id=applicant_id,
             )
             logger.info(
-                f"Resume Processed Successfully : {object_path}"
+                f"Resume Processed Successfully : {resume_url}"
             )
             return file_hash
         except ValueError as e:
@@ -176,47 +142,37 @@ class ResumeProcessor:
                 local_resume
             )
 
-    # Download Resume From MinIO
     def _download_resume(
         self,
-        object_path: str,
-    ) -> Path:
+        resume_url: str,
+    ) -> str:
 
-        logger.info(
-            "Downloading resume from MinIO..."
+        logger.info(f"Downloading Resume : {resume_url}")
+
+        response = requests.get(
+            resume_url,
+            timeout=120,
+        )
+        response.raise_for_status()
+
+        extension = os.path.splitext(
+            resume_url.split("?")[0]
+        )[1]
+
+        if not extension:
+            extension = ".pdf"
+
+        temp_file = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=extension,
         )
 
-        resume_bytes = self.minio_repository.download_file(
-            object_path
-        )
+        temp_file.write(response.content)
+        temp_file.close()
 
-        temp_dir = Path(
-            settings.TEMP_DIR
-        )
+        logger.info(f"Downloaded : {temp_file.name}")
 
-        temp_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        local_resume = temp_dir / Path(
-            object_path
-        ).name
-
-        with open(
-            local_resume,
-            "wb",
-        ) as file:
-
-            file.write(
-                resume_bytes
-            )
-
-        logger.info(
-            f"Resume downloaded : {local_resume.name}"
-        )
-
-        return local_resume
+        return Path(temp_file.name)
 
     # Parse Resume
     def _parse_resume(
@@ -302,48 +258,22 @@ class ResumeProcessor:
     # Save Candidate Profile
     def _save_profile(
         self,
-        resume: dict,
-        resume_path: str,
-        file_hash: str,
+        resume,
+        resume_path,
+        file_hash,
+        embedding,
+        applicant_id,
     ):
-        """
-        Save candidate profile in MongoDB.
-        """
-        logger.info(
-            "Saving candidate profile..."
-        )
         return self.profile_repository.save_profile(
             resume=resume,
             resume_path=resume_path,
             file_hash=file_hash,
+            embedding=embedding,
+            applicant_id=applicant_id,
         )
         
 
-    # Save Embedding
-    def _save_embedding(
-        self,
-        profile_id:str,
-        embedding: list,
-        job_position: str,
-    ):
-        """
-        Save embedding into MongoDB Atlas.
-        """
-        logger.info(
-            "Saving embedding..."
-        )
-        self.embedding_repository.save_embedding(
-            profile_id=profile_id,
-            embedding=embedding,
-            embedding_model=settings.EMBEDDING_MODEL,
-            dimension=len(embedding),
-            job_position=job_position,
-            uploaded_at=datetime.utcnow(),
-        )
-        logger.info(
-            "Embedding saved."
-        )
-
+    
     # Cleanup Temporary File
     def _cleanup(
         self,

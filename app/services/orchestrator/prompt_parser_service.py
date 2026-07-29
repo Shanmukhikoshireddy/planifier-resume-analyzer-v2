@@ -1,12 +1,80 @@
 from app.config.logging import logger
 from app.prompts.job_prompt import build_job_prompt
 from app.services.shared.openai_service import OpenAIService
-
+from app.prompts.intent_prompt import build_intent_prompt
 
 class PromptParserService:
 
     def __init__(self):
         self.openai_service = OpenAIService()
+
+    def detect_intent(self, prompt: str):
+
+        logger.info("=" * 80)
+        logger.info("INTENT DETECTION")
+        logger.info("=" * 80)
+
+        llm_prompt = build_intent_prompt(prompt)
+
+        response = self.openai_service.generate_json(
+            llm_prompt
+        )
+
+        if not isinstance(response, dict):
+            raise ValueError("Invalid JSON returned.")
+
+        intent = str(
+            response.get("intent", "")
+        ).strip().upper()
+
+        valid_intents = {
+            "SEARCH",
+            "SEARCH_MODIFICATION",
+            "GENERAL",
+            "SHORTLIST",
+            "REJECT",
+            "SHOW_SHORTLISTED",
+            "SHOW_REJECTED",
+            "UNDO_SHORTLIST",
+            "UNDO_REJECT",
+            "CANDIDATE_REASONING",
+            "SEARCH_HISTORY",
+            "RESET_SEARCH",
+        }
+
+        if intent not in valid_intents:
+            raise ValueError(f"Invalid intent : {intent}")
+
+        response["intent"] = intent
+
+        return response
+
+
+    def parse_search(self, prompt: str):
+
+        logger.info("=" * 80)
+        logger.info("SEARCH PARSER")
+        logger.info("=" * 80)
+
+        llm_prompt = build_job_prompt(prompt)
+
+        response = self.openai_service.generate_json(
+            llm_prompt
+        )
+
+        if not isinstance(response, dict):
+            raise ValueError("Invalid JSON returned.")
+
+        job = response.get("job")
+
+        if not isinstance(job, dict):
+            raise ValueError("Job object missing.")
+
+        self._normalize(job)
+
+        return {
+            "job": job
+        }
 
     def parse(self, prompt: str) -> dict:
         """

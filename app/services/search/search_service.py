@@ -1,14 +1,11 @@
 from app.config.logging import logger
 
-from app.repository.job_repository import JobRepository
 from app.repository.search_repository import SearchRepository
-from app.repository.embedding_repository import EmbeddingRepository
 from app.repository.profile_repository import ProfileRepository
 
 from app.services.shared.openai_service import OpenAIService
 from app.services.ingestion.embedding_service import EmbeddingService
 
-from app.services.search.cache_service import CacheService
 from app.services.search.reranker_service import RerankerService
 from app.services.search.scoring_service import ScoringService
 
@@ -25,17 +22,11 @@ class SearchService:
 
     def __init__(self):
 
-        self.job_repository = JobRepository()
-
         self.search_repository = SearchRepository()
-
-        self.embedding_repository = EmbeddingRepository()
 
         self.profile_repository = ProfileRepository()
 
         self.embedding_service = EmbeddingService()
-
-        self.cache_service = CacheService()
 
         self.reranker_service = RerankerService()
 
@@ -76,25 +67,27 @@ class SearchService:
         logger.info("SEARCH PIPELINE STARTED")
         logger.info("=" * 80)
 
-        job_id = search_context["job_id"]
+        search_id = search_context["search_id"]
 
-        job = search_context["job"]
+        parsed_search = search_context["parsed_search"]
 
-        job_position = search_context["job_position"]
+        job_position_id = search_context["job_position_id"]
 
         received_within = search_context["received_within"]
 
+        global_search_allowed = search_context["global_search_allowed"]
+
         original_prompt = search_context["original_prompt"]
 
-        logger.info(f"Job Id : {job_id}")
+        logger.info(f"Job Id : {job_position_id}")
 
-        logger.info(f"Job Position : {job_position}")
+        logger.info(f"Job Position : {job_position_id}")
 
 
         # Build Embedding Text
 
 
-        job_text = self.build_job_embedding_text(job)
+        job_text = self.build_search_embedding_text(parsed_search)
 
 
         # Generate Embedding
@@ -107,86 +100,20 @@ class SearchService:
         logger.info("Embedding Generated.")
 
 
-        # Cache Lookup
-
-
-        is_new_search = search_context.get(
-            "is_new_search",
-            True,
-        )
-        logger.info(f"is_new_search = {is_new_search}")
-        logger.info(f"Search Context = {search_context}")
-
-        if is_new_search:
-
-            cached_job = self.cache_service.get_cached_job(
-                embedding=embedding,
-                job_position=job_position,
-            )
-
-        else:
-
-            cached_job = None
-
-        if cached_job:
-
-            logger.info("CACHE HIT")
-
-            results = self.search_repository.get_search_results(
-                job_id=job_id,
-                conversation_message_id=conversation_message_id,
-            )
-
-            # Update Current Conversation Job
-
-            self.job_repository.update_job(
-                job_id=job_id,
-                update_fields={
-                    "prompt": job,
-                    "job_embedding": embedding,
-                    "original_prompt": original_prompt,
-                },
-            )
-
-            start = (page - 1) * page_size
-
-            end = start + page_size
-
-            return {
-
-                "job_id": job_id,
-
-                "cached": True,
-
-                "page": page,
-
-                "page_size": page_size,
-
-                "total_candidates": len(results),
-
-                "total_pages": (
-                    len(results)
-                    + page_size
-                    - 1
-                ) // page_size,
-
-                "results": results[start:end],
-
-            }
-
-        else:
-            logger.info("CACHE MISS")
-
 
         # Update Current Job
 
 
-        self.job_repository.update_job(
-            job_id=job_id,
+        self.search_repository.update_search(
+            search_id=search_id,
             update_fields={
-                "prompt": job,
-                "job_embedding": embedding,
+
+                "parsed_search": parsed_search,
+
+                "search_embedding": embedding,
+
                 "original_prompt": original_prompt,
+
             },
         )
 
@@ -195,25 +122,16 @@ class SearchService:
 
 
         return self.vector_search(
-
-            job_id=job_id,
-
-            job=job,
-
+            search_id=search_id,
+            parsed_search=parsed_search,
             job_text=job_text,
-
-            job_embedding=embedding,
-
-            job_position=job_position,
-
+            search_embedding=embedding,
+            job_position_id=job_position_id,
             received_within=received_within,
-
+            global_search_allowed=global_search_allowed,
             page=page,
-
             page_size=page_size,
-
             conversation_message_id=conversation_message_id,
-
         )
     
 ######
@@ -252,16 +170,16 @@ class SearchService:
 ######
     # Build Embedding Text######
 
-    def build_job_embedding_text(
+    def build_search_embedding_text(
         self,
-        job: dict,
+        parsed_search: dict,
     ) -> str:
 
 
         # Experience
 
 
-        experience = job.get("experience") or {}
+        experience = parsed_search.get("experience") or {}
 
         experience_text = ""
 
@@ -293,7 +211,7 @@ class SearchService:
 
         required_skills = []
 
-        for skill in job.get(
+        for skill in parsed_search.get(
             "required_skills",
             [],
         ):
@@ -314,7 +232,7 @@ class SearchService:
 
         preferred_skills = []
 
-        for skill in job.get(
+        for skill in parsed_search.get(
             "preferred_skills",
             [],
         ):
@@ -335,7 +253,7 @@ class SearchService:
 
         excluded_skills = []
 
-        for skill in job.get(
+        for skill in parsed_search.get(
             "excluded_skills",
             [],
         ):
@@ -356,19 +274,19 @@ class SearchService:
 
         sections = [
 
-            job.get(
+            parsed_search.get(
                 "title",
                 "",
             ),
 
             experience_text,
 
-            job.get(
+            parsed_search.get(
                 "education",
                 "",
             ),
 
-            job.get(
+            parsed_search.get(
                 "location",
                 "",
             ),
@@ -380,35 +298,35 @@ class SearchService:
             " ".join(excluded_skills),
 
             self.list_to_text(
-                job.get(
+                parsed_search.get(
                     "certifications",
                     [],
                 )
             ),
 
             self.list_to_text(
-                job.get(
+                parsed_search.get(
                     "responsibilities",
                     [],
                 )
             ),
 
             self.list_to_text(
-                job.get(
+                parsed_search.get(
                     "qualifications",
                     [],
                 )
             ),
 
             self.list_to_text(
-                job.get(
+                parsed_search.get(
                     "nice_to_have",
                     [],
                 )
             ),
 
             self.list_to_text(
-                job.get(
+                parsed_search.get(
                     "keywords",
                     [],
                 )
@@ -437,12 +355,13 @@ class SearchService:
 
     def vector_search(
         self,
-        job_id,
-        job,
+        search_id,
+        parsed_search,
         job_text,
-        job_embedding,
-        job_position,
+        search_embedding,
+        job_position_id,
         received_within,
+        global_search_allowed,
         page,
         page_size,
         conversation_message_id,
@@ -457,10 +376,11 @@ class SearchService:
 
 
         vector_results = (
-            self.embedding_repository.search_similar_embeddings(
-                embedding=job_embedding,
-                job_position=job_position,
+            self.profile_repository.search_similar_profiles(
+                embedding=search_embedding,
+                job_position_id=job_position_id,
                 received_within=received_within,
+                global_search_allowed=global_search_allowed,
             )
         )
 
@@ -474,20 +394,9 @@ class SearchService:
 
         candidates = []
 
-        for result in vector_results:
-            logger.info(result)
+        for profile in vector_results:
 
-            profile = self.profile_repository.get_profile(
-                result["profile_id"]
-            )
-
-            if profile is None:
-                continue
-
-            profile["semantic_score"] = result.get(
-                "embedding_score",
-                0,
-            )
+            profile["semantic_score"] = profile.pop("embedding_score", 0)
 
             candidates.append(profile)
 
@@ -505,25 +414,24 @@ class SearchService:
                 "No candidates found from vector search."
             )
 
-            self.job_repository.update_result_count(
-                job_id,
+            self.search_repository.update_result_count(
+                search_id,
                 0,
             )
 
-            self.job_repository.update_status(
-                job_id,
+            self.search_repository.update_status(
+                search_id,
                 "COMPLETED",
             )
 
-            return self.rerank_candidates(
-                job_id=job_id,
-                job=job,
-                job_text=job_text,
-                candidates=candidates,
-                page=page,
-                page_size=page_size,
-                conversation_message_id=conversation_message_id,
-            )
+            return {
+                "search_id": search_id,
+                "page": page,
+                "page_size": page_size,
+                "total_candidates": 0,
+                "total_pages": 0,
+                "results": [],
+            }
 
 
         # Business Rule Filtering
@@ -541,7 +449,7 @@ class SearchService:
 
             candidates,
 
-            job,
+            parsed_search,
 
         )
 
@@ -559,21 +467,19 @@ class SearchService:
                 "No candidates remained after filtering."
             )
 
-            self.job_repository.update_result_count(
-                job_id,
+            self.search_repository.update_result_count(
+                search_id,
                 0,
             )
 
-            self.job_repository.update_status(
-                job_id,
+            self.search_repository.update_status(
+                search_id,
                 "COMPLETED",
             )
 
             return {
 
-                "job_id": job_id,
-
-                "cached": False,
+                "search_id": search_id,
 
                 "page": page,
 
@@ -592,22 +498,22 @@ class SearchService:
 
 
         return self.rerank_candidates(
-                job_id=job_id,
-                job=job,
-                job_text=job_text,
-                candidates=candidates,
-                page=page,
-                page_size=page_size,
-                conversation_message_id=conversation_message_id,
-            )
+            search_id=search_id,
+            parsed_search=parsed_search,
+            job_text=job_text,
+            candidates=candidates,
+            page=page,
+            page_size=page_size,
+            conversation_message_id=conversation_message_id,
+        )
     
 ######
     # Rerank Candidates######
 
     def rerank_candidates(
         self,
-        job_id,
-        job,
+        search_id,
+        parsed_search,
         job_text,
         candidates,
         page,
@@ -714,29 +620,22 @@ Current Company
 
 
         return self.score_candidates(
-
-            job_id=job_id,
-
-            job=job,
-
+            search_id=search_id,
+            parsed_search=parsed_search,
             candidates=candidates,
-
             page=page,
-
             page_size=page_size,
-
             conversation_message_id=conversation_message_id,
-
         )
-    
+            
 
 ######
     # ATS Scoring######
 
     def score_candidates(
         self,
-        job_id,
-        job,
+        search_id,
+        parsed_search,
         candidates,
         page,
         page_size,
@@ -750,7 +649,7 @@ Current Company
         scored_candidates = []
 
         total_required_skills = len(
-            job.get(
+            parsed_search.get(
                 "required_skills",
                 [],
             )
@@ -766,7 +665,7 @@ Current Company
 
             score = self.scoring_service.calculate_score(
 
-                job=job,
+                job=parsed_search,
 
                 candidate=candidate,
 
@@ -918,7 +817,7 @@ Current Company
 
         return self.generate_reasoning(
 
-            job_id=job_id,
+            search_id=search_id,
 
             candidates=scored_candidates,
 
@@ -939,7 +838,7 @@ Current Company
 
     def generate_reasoning(
         self,
-        job_id,
+        search_id,
         candidates,
         total_candidates,
         total_pages,
@@ -967,7 +866,7 @@ Current Company
 
 
         self.search_repository.save_search_results(
-            job_id=job_id,
+            search_id=search_id,
             candidates=candidates,
             conversation_message_id=conversation_message_id,
         )
@@ -976,17 +875,17 @@ Current Company
         # Update Job
 
 
-        self.job_repository.update_result_count(
+        self.search_repository.update_result_count(
 
-            job_id,
+            search_id,
 
             total_candidates,
 
         )
 
-        self.job_repository.update_status(
+        self.search_repository.update_status(
 
-            job_id,
+            search_id,
 
             "COMPLETED",
 
@@ -1012,9 +911,7 @@ Current Company
 
         return {
 
-            "job_id": job_id,
-
-            "cached": False,
+            "search_id": search_id,
 
             "page": page,
 
@@ -1033,7 +930,7 @@ Current Company
 
     def get_candidate_reasoning(
         self,
-        job_id: str,
+        search_id: str,
         profile_id: str,
     ):
 
@@ -1047,7 +944,7 @@ Current Company
 
         cached = self.search_repository.get_reasoning(
 
-            job_id,
+            search_id,
 
             profile_id,
 
@@ -1076,9 +973,6 @@ Current Company
                 "profile_id": profile_id,
 
                 "reasoning": cached["reasoning"],
-
-                "cached": True,
-
             }
 
 
@@ -1087,7 +981,7 @@ Current Company
 
         candidate = self.search_repository.get_candidate(
 
-            job_id,
+            search_id,
 
             profile_id,
 
@@ -1105,13 +999,13 @@ Current Company
         # Job
 
 
-        job = self.job_repository.get_job(
+        parsed_search = self.search_repository.get_search(
 
-            job_id,
+            search_id,
 
         )
 
-        if job is None:
+        if parsed_search is None:
 
             return {
 
@@ -1233,27 +1127,27 @@ Current Company
         # Job Context
 
 
-        job_context = {
+        search_context = {
 
             "title":
 
-                job.get("title"),
+                parsed_search.get("title"),
 
             "experience":
 
-                job.get("experience"),
+                parsed_search.get("experience"),
 
             "education":
 
-                job.get("education"),
+                parsed_search.get("education"),
 
             "location":
 
-                job.get("location"),
+                parsed_search.get("location"),
 
             "required_skills":
 
-                job.get(
+                parsed_search.get(
 
                     "required_skills",
 
@@ -1263,7 +1157,7 @@ Current Company
 
             "preferred_skills":
 
-                job.get(
+                parsed_search.get(
 
                     "preferred_skills",
 
@@ -1273,7 +1167,7 @@ Current Company
 
             "excluded_skills":
 
-                job.get(
+                parsed_search.get(
 
                     "excluded_skills",
 
@@ -1283,7 +1177,7 @@ Current Company
 
             "responsibilities":
 
-                job.get(
+                parsed_search.get(
 
                     "responsibilities",
 
@@ -1293,7 +1187,7 @@ Current Company
 
             "qualifications":
 
-                job.get(
+                parsed_search.get(
 
                     "qualifications",
 
@@ -1303,7 +1197,7 @@ Current Company
 
             "nice_to_have":
 
-                job.get(
+                parsed_search.get(
 
                     "nice_to_have",
 
@@ -1313,7 +1207,7 @@ Current Company
 
             "certifications":
 
-                job.get(
+                parsed_search.get(
 
                     "certifications",
 
@@ -1329,7 +1223,7 @@ Current Company
 
         prompt = build_reasoning_prompt(
 
-            job_context,
+            search_context,
 
             candidate_context,
 
@@ -1351,7 +1245,7 @@ Current Company
 
         self.search_repository.save_reasoning(
 
-            job_id,
+            search_id,
 
             profile_id,
 
@@ -1366,7 +1260,5 @@ Current Company
             "profile_id": profile_id,
 
             "reasoning": reasoning,
-
-            "cached": False,
 
         }

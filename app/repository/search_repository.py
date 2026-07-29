@@ -1,482 +1,832 @@
 from datetime import datetime
 from bson import ObjectId
 from app.repository.base_repository import BaseRepository
-import re
-from app.config.logging import logger
-from app.repository.job_repository import JobRepository
 
 class SearchRepository(BaseRepository):
     def __init__(self):
         super().__init__()
-        self.collection = self.db[
-            "search_results"
-        ]
-        self.job_repository = JobRepository()
-        
+        self.collection = self.db["searches"]
+        self.search_results = self.db["search_results"]
 
-    # Save Search Results
-    def save_search_results(
+    # Create Job
+    def create_search(
         self,
-        job_id: str,
-        candidates: list,
-        conversation_message_id=None,
+        parsed_search: dict,
+        original_prompt: str,
+        embedding: list,
+        job_position_id: str,
+        received_within: str,
+        global_search_allowed: bool,
     ):
-        documents = []
+        document = {
+            "title": parsed_search.get("title", ""),
 
-        for candidate in candidates:
+            "job_position_id": job_position_id,
 
-            documents.append(
-                {
-                    "job_id": job_id,
-                    "conversation_message_id": conversation_message_id,
+            "parsed_search": parsed_search,
 
-                    "profile_id": candidate.get("profile_id"),
+            "global_search_allowed": global_search_allowed,
+            "original_prompt": original_prompt,
+            "search_embedding": embedding,
+            "received_within": received_within,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "status": "PROCESSING",
+            "search_result_count": 0,
+            "conversation": {
+                "messages": [],
+                "current_search": parsed_search,
+                "latest_search_id": None,
+                "context_summary": "",
+            },
+        }
+        result = self.collection.insert_one(document)
+        return str(result.inserted_id)
 
-                    "candidate_name": candidate.get("candidate_name"),
-
-                    "email": candidate.get("email"),
-
-                    "phone": candidate.get("phone"),
-
-                    "location": candidate.get("location"),
-
-                    "designation": candidate.get("designation"),
-
-                    "job_position": candidate.get("job_position"),
-
-                    "current_company": candidate.get("current_company"),
-
-                    "experience": candidate.get("total_experience"),
-
-                    "experience_years": candidate.get("experience_years"),
-
-                    "summary": candidate.get("summary"),
-
-                    "skills": candidate.get(
-                        "skills",
-                        [],
-                    ),
-
-                    "education": candidate.get(
-                        "education",
-                        [],
-                    ),
-
-                    "projects": candidate.get(
-                        "projects",
-                        [],
-                    ),
-
-                    "certifications": candidate.get(
-                        "certifications",
-                        [],
-                    ),
-
-                    "resume_text": candidate.get(
-                        "resume_text",
-                    ),
-
-                    ####################################################
-                    # Search Scores
-                    ####################################################
-
-                    "semantic_score":
-                        candidate.get(
-                            "semantic_score",
-                            0,
-                        ) * 100,
-
-                    "rerank_score":
-                        candidate.get(
-                            "rerank_score",
-                            0,
-                        ) * 100,
-
-                    "skill_match_percentage":
-                        candidate.get(
-                            "skill_match_percentage",
-                            0,
-                        ),
-
-                    "matched_skills":
-                        candidate.get(
-                            "matched_skills",
-                            [],
-                        ),
-
-                    "missing_skills":
-                        candidate.get(
-                            "missing_skills",
-                            [],
-                        ),
-
-                    "matched_preferred_skills":
-                        candidate.get(
-                            "matched_preferred_skills",
-                            [],
-                        ),
-
-                    "matched_certifications":
-                        candidate.get(
-                            "matched_certifications",
-                            [],
-                        ),
-
-                    "education_match":
-                        candidate.get(
-                            "education_match",
-                        ),
-
-                    "score_breakdown":
-                        candidate.get(
-                            "score_breakdown",
-                            {},
-                        ),
-
-                    "match_level":
-                        candidate.get(
-                            "match_level",
-                        ),
-
-                    "final_score":
-                        candidate.get(
-                            "final_score",
-                            0,
-                        ),
-
-                    ####################################################
-                    # Candidate Status
-                    ####################################################
-
-                    "candidate_status": "PENDING",
-
-                    ####################################################
-                    # AI Reasoning
-                    ####################################################
-
-                    "reasoning_generated": False,
-
-                    "reasoning": None,
-
-                    ####################################################
-                    # Audit
-                    ####################################################
-
-                    "created_at": datetime.utcnow(),
-
-                    "updated_at": datetime.utcnow(),
-                }
-            )
-
-        if documents:
-
-            self.collection.insert_many(
-                documents
-            )
-
-    # Get Search Results
-    def get_search_results(
+    # Update Job
+    def update_search(
         self,
-        job_id: str,
-        conversation_message_id: str = None,
+        search_id: str,
+        update_fields: dict,
     ):
-        if conversation_message_id:
-            search_id = conversation_message_id
-        else:
-            search_id = self.job_repository.get_latest_search_id(job_id)
+        update_fields["updated_at"] = datetime.utcnow()
+        self.collection.update_one(
+            {"_id": ObjectId(search_id)},
+            {"$set": update_fields}
+        )
 
-        if not search_id:
-            return []
+    # Get Job
+    def get_search(
+        self,
+        search_id: str,
+    ):
+        document = self.collection.find_one(
+            {"_id": ObjectId(search_id)}
+        )
+        if not document:
+            return None
+        document["_id"] = str(document["_id"])
 
-        return list(
+        # Flatten Parsed Job
+        parsed_search = document.get(
+            "parsed_search",
+            {}
+        )
+        return {
+            "search_id": document["_id"],
+            "title": parsed_search.get(
+                "title",
+                ""
+            ),
+            "job_position_id": document.get(
+                "job_position_id",
+                ""
+            ),
+            "experience": parsed_search.get(
+                "experience",
+                ""
+            ),
+
+            "education": parsed_search.get(
+                "education",
+                ""
+            ),
+
+            "required_skills": parsed_search.get(
+                "required_skills",
+                []
+            ),
+
+            "preferred_skills": parsed_search.get(
+                "preferred_skills",
+                []
+            ),
+
+            "excluded_skills": parsed_search.get(
+                "excluded_skills",
+                []
+            ),
+
+            "certifications": parsed_search.get(
+                "certifications",
+                []
+            ),
+
+            "responsibilities": parsed_search.get(
+                "responsibilities",
+                []
+            ),
+
+            "qualifications": parsed_search.get(
+                "qualifications",
+                []
+            ),
+
+            "nice_to_have": parsed_search.get(
+                "nice_to_have",
+                []
+            ),
+
+            "status": document.get(
+                "status"
+            ),
+
+            "created_at": document.get(
+                "created_at"
+            ),
+
+        }
+    # Get All Jobs (Sidebar)
+    def get_all_search(self):
+
+        jobs = list(
             self.collection.find(
                 {
-                    "job_id": job_id,
-                    "conversation_message_id": search_id,
+                    "status": {
+                        "$ne": "NEW"
+                    }
                 },
                 {
-                    "_id": 0,
+                    "parsed_search.title": 1,
+                    "original_prompt": 1,
+                    "updated_at": 1,
+                    "status": 1,
+                    "search_result_count": 1,
                 },
             ).sort(
-                "final_score",
+                "updated_at",
                 -1,
             )
         )
 
-    # Get Candidate
-    def get_candidate(
-        self,
-        job_id: str,
-        profile_id: str,
-    ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+        history = []
 
-        if not latest_search_id:
+        for job in jobs:
+
+            history.append({
+
+                "search_id": str(job["_id"]),
+
+                "title": job.get(
+                    "parsed_search",
+                    {},
+                ).get(
+                    "title",
+                    ""
+                ),
+
+                "last_prompt": job.get(
+                    "original_prompt",
+                    "",
+                ),
+
+                "candidate_count": job.get(
+                    "search_result_count",
+                    0,
+                ),
+
+                "status": job.get(
+                    "status",
+                ),
+
+                "updated_at": job.get(
+                    "updated_at",
+                ),
+
+            })
+
+        return history
+
+
+    def get_chat(
+        self,
+        search_id: str,
+    ):
+
+        document = self.collection.find_one(
+            {
+                "_id": ObjectId(search_id)
+            }
+        )
+
+        if document is None:
             return None
 
-        return self.collection.find_one(
-            {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-                "profile_id": profile_id,
-            },
-            {
-                "_id": 0,
-            },
+        return {
+
+            "search_id": str(document["_id"]),
+
+            "status": document.get(
+                "status"
+            ),
+
+            "updated_at": document.get(
+                "updated_at"
+            ),
+
+            "search_result_count": document.get(
+                "search_result_count",
+                0,
+            ),
+
+            "conversation": document.get(
+                "conversation",
+                {},
+            ),
+        }
+    # Delete Job
+    def delete_search(
+        self,
+        search_id: str,
+    ):
+        self.collection.delete_one(
+            {"_id": ObjectId(search_id)}
         )
 
-    # Shortlist Candidate
-    def shortlist_candidate(
+    # Count Jobs
+    def count_search(self):
+        return self.collection.count_documents({})
+
+    
+    # Update Result Count
+    def update_result_count(
         self,
-        job_id: str,
-        profile_id: str,
+        search_id: str,
+        count: int,
     ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+        self.collection.update_one(
+            {"_id": ObjectId(search_id)},
+            {
+                "$set": {
+                    "search_result_count": count,
+                    "updated_at": datetime.utcnow(),
+                }
+            }
+        )
+
+    # Update Status
+    def update_status(
+        self,
+        search_id: str,
+        status: str,
+    ):
+        self.collection.update_one(
+            {"_id": ObjectId(search_id)},
+            {
+                "$set": {
+                    "status": status,
+                    "updated_at": datetime.utcnow(),
+                }
+            }
+        )
+
+    # Get Processing Jobs
+    def get_processing_jobs(self):
+        jobs = list(
+            self.collection.find(
+                {"status": "PROCESSING"}
+            )
+        )
+        for job in jobs:
+            job["_id"] = str(job["_id"])
+        return jobs
+
+    # Get Completed Jobs
+    def get_completed_jobs(self):
+        jobs = list(
+            self.collection.find(
+                {"status": "COMPLETED"}
+            ).sort(
+                "created_at",
+                -1,
+            )
+        )
+        for job in jobs:
+            job["_id"] = str(job["_id"])
+        return jobs
+
+    # Latest Job
+    def get_latest_search(self):
+        job = self.collection.find_one(
+            sort=[
+                ("created_at", -1)
+            ]
+        )
+        if job:
+            job["_id"] = str(job["_id"])
+        return job
+    
+
+
+    ############################################################
+    # Get Conversation
+    ############################################################
+
+    def get_conversation(
+        self,
+        search_id: str,
+    ):
+
+        document = self.collection.find_one(
+            {
+                "_id": ObjectId(search_id)
+            }
+        )
+
+        if not document:
+
+            return None
+
+        return document.get(
+            "conversation",
+            {}
+        )
+    
+
+    ############################################################
+    # Update Conversation
+    ############################################################
+
+    def update_conversation(
+        self,
+        search_id: str,
+        conversation: dict,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(search_id)
+            },
+
+            {
+                "$set": {
+
+                    "conversation": conversation,
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+
+    ############################################################
+    # Add Message
+    ############################################################
+
+    def add_message(
+        self,
+        search_id: str,
+        role: str,
+        content,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(search_id)
+            },
+
+            {
+                "$push": {
+
+                    "conversation.messages": {
+
+                        "role": role,
+
+                        "content": content,
+
+                        "timestamp": datetime.utcnow(),
+
+                    }
+
+                },
+
+                "$set": {
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+
+
+    ############################################################
+    # Update Current Job
+    ############################################################
+
+    def update_current_search(
+        self,
+        search_id: str,
+        current_search: dict,
+    ):
+
+        self.collection.update_one(
+
+            {
+                "_id": ObjectId(search_id)
+            },
+
+            {
+                "$set": {
+
+                    "conversation.current_search": current_search,
+
+                    "updated_at": datetime.utcnow(),
+
+                }
+
+            }
+
+        )
+
+    ############################################################
+    # Update Latest Search
+    ############################################################
+
+    def update_latest_search(
+        self,
+        conversation_search_id: str,
+        conversation_message_id: str,
+    ):
 
         self.collection.update_one(
             {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-                "profile_id": profile_id,
+                "_id": ObjectId(conversation_search_id)
             },
             {
                 "$set": {
-                    "candidate_status": "SHORTLISTED",
+                    "conversation.latest_search_id": conversation_message_id,
                     "updated_at": datetime.utcnow(),
                 }
-            },
+            }
         )
 
-    # Reject Candidate
-    def reject_candidate(
+
+    def create_empty_search(
         self,
-        job_id: str,
+    ):
+
+        document = {
+
+            "title": "",
+
+            "job_position_id": "",
+
+            "parsed_search": {},
+
+            "global_search_allowed": False,
+
+            "original_prompt": "",
+
+            "search_embedding": [],
+
+            "received_within": "ALL",
+
+            "conversation": {
+
+                "messages": [],
+
+                "current_search": {},
+
+                "latest_search_id": None,
+
+                "context_summary": "",
+
+            },
+
+            "status": "NEW",
+
+            "search_result_count": 0,
+
+            "created_at": datetime.utcnow(),
+
+            "updated_at": datetime.utcnow(),
+
+        }
+
+        result = self.collection.insert_one(document)
+
+        return str(result.inserted_id)
+    
+
+    def get_latest_search_id(
+        self,
+        search_id: str,
+    ):
+
+        document = self.collection.find_one(
+            {
+                "_id": ObjectId(search_id)
+            },
+            {
+                "conversation.latest_search_id": 1,
+            }
+        )
+
+        if not document:
+            return None
+
+        return (
+            document.get("conversation", {})
+            .get("latest_search_id")
+        )
+
+
+    ############################################################
+    # Save Search Results
+    ############################################################
+
+    def save_search_results(
+        self,
+        search_id: str,
+        candidates: list,
+        conversation_message_id: str,
+    ):
+
+        # Remove previous results for this conversation message
+        self.search_results.delete_many(
+            {
+                "conversation_message_id": conversation_message_id,
+            }
+        )
+
+        documents = []
+
+        for rank, candidate in enumerate(candidates, start=1):
+
+            document = candidate.copy()
+
+            document["search_id"] = search_id
+            document["conversation_message_id"] = conversation_message_id
+            document["rank"] = rank
+            document["created_at"] = datetime.utcnow()
+
+            documents.append(document)
+
+        if documents:
+            self.search_results.insert_many(documents)
+
+
+    ############################################################
+    # Get Candidate
+    ############################################################
+
+    def get_candidate(
+        self,
+        search_id: str,
         profile_id: str,
     ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
 
-        self.collection.update_one(
+        return self.search_results.find_one(
             {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
+                "search_id": search_id,
+                "profile_id": profile_id,
+            }
+        )
+
+
+    ############################################################
+    # Get Reasoning
+    ############################################################
+
+    def get_reasoning(
+        self,
+        search_id: str,
+        profile_id: str,
+    ):
+
+        return self.search_results.find_one(
+            {
+                "search_id": search_id,
                 "profile_id": profile_id,
             },
             {
-                "$set": {
-                    "candidate_status": "REJECTED",
-                    "updated_at": datetime.utcnow(),
-                }
+                "reasoning": 1,
+                "reasoning_generated": 1,
             },
         )
-        
-    # Save AI Reasoning
+
+
+    ############################################################
+    # Save Reasoning
+    ############################################################
+
     def save_reasoning(
         self,
-        job_id,
-        profile_id,
-        reasoning,
+        search_id: str,
+        profile_id: str,
+        reasoning: str,
     ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
 
-        self.collection.update_one(
+        self.search_results.update_one(
             {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
+                "search_id": search_id,
                 "profile_id": profile_id,
             },
             {
                 "$set": {
                     "reasoning": reasoning,
                     "reasoning_generated": True,
-                    "reasoning_generated_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow(),
                 }
             },
         )
 
-    # Get AI Reasoning
-    def get_reasoning(
-        self,
-        job_id,
-        profile_id,
-    ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
 
-        if not latest_search_id:
-            return None
-
-        return self.collection.find_one(
-            {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-                "profile_id": profile_id,
-            },
-            {
-                "_id": 0,
-                "reasoning": 1,
-                "reasoning_generated": 1,
-            },
-        )
-
-    # Delete Search Results
-    def delete_search_results(
-        self,
-        job_id: str,
-    ):
-        self.collection.delete_many(
-            {"job_id": job_id}
-        )
-
-    # Count Search Results
-    def count_results(
-        self,
-        job_id: str,
-    ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
-
-        if not latest_search_id:
-            return 0
-
-        return self.collection.count_documents(
-            {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-            }
-        )
-    
-    # Get Shortlisted Candidates
-    def get_shortlisted_candidates(
-        self,
-        job_id: str,
-    ):
-        return list(
-            self.collection.find(
-                {
-                    "job_id": job_id,
-                    "candidate_status": "SHORTLISTED",
-                },
-                {"_id": 0,},
-            ).sort(
-                "final_score",
-                -1,
-            )
-        )
-
-    # Get Rejected Candidates
-    def get_rejected_candidates(
-        self,
-        job_id: str,
-    ):
-        return list(
-            self.collection.find(
-                {
-                    "job_id": job_id,
-                    "candidate_status": "REJECTED",
-                },
-                {"_id": 0,},
-            ).sort(
-                "final_score",
-                -1,
-            )
-        )
+    ############################################################
+    # Get Candidate By Name
+    ############################################################
 
     def get_candidate_by_name(
         self,
-        job_id,
-        candidate_name,
+        search_id: str,
+        candidate_name: str,
     ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
 
-        if not latest_search_id:
-            return None
-
-        candidate = self.collection.find_one(
+        return self.search_results.find_one(
             {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
+                "search_id": search_id,
                 "candidate_name": {
-                    "$regex": f"^{re.escape(candidate_name)}$",
+                    "$regex": f"^{candidate_name}$",
                     "$options": "i",
                 },
             }
         )
 
-        if candidate:
-            return candidate
 
-        return self.collection.find_one(
-            {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-                "candidate_name": {
-                    "$regex": re.escape(candidate_name),
-                    "$options": "i",
-                },
-            }
-        )
-    
-    def undo_shortlist(
-        self,
-        job_id,
-        profile_id,
-    ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
+    ############################################################
+    # Get Results By Conversation Message
+    ############################################################
 
-        self.collection.update_one(
-            {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-                "profile_id": profile_id,
-            },
-            {
-                "$set": {
-                    "candidate_status": "PENDING",
-                    "updated_at": datetime.utcnow(),
-                }
-            },
-        )
-
-
-    def undo_reject(
-        self,
-        job_id,
-        profile_id,
-    ):
-        latest_search_id = self.job_repository.get_latest_search_id(job_id)
-
-        self.collection.update_one(
-            {
-                "job_id": job_id,
-                "conversation_message_id": latest_search_id,
-                "profile_id": profile_id,
-            },
-            {
-                "$set": {
-                    "candidate_status": "PENDING",
-                    "updated_at": datetime.utcnow(),
-                }
-            },
-        )
-
-
-    
-
-
-    # Get Search Results By Conversation Message
     def get_results_by_conversation_message(
         self,
         conversation_message_id: str,
     ):
-        return list(
-            self.collection.find(
+
+        results = list(
+            self.search_results.find(
                 {
                     "conversation_message_id": conversation_message_id,
-                },
-                {
-                    "_id": 0,
-                },
-            ).sort(
-                "final_score",
-                -1,
-            )
+                }
+            ).sort("rank", 1)
         )
+
+        for result in results:
+            result["_id"] = str(result["_id"])
+
+        return results
+
+    ############################################################
+    # Get Search Results
+    ############################################################
+
+    def get_search_results(
+        self,
+        search_id: str,
+        conversation_message_id: str,
+    ):
+
+        results = list(
+            self.search_results.find(
+                {
+                    "search_id": search_id,
+                    "conversation_message_id": conversation_message_id,
+                }
+            ).sort("rank", 1)
+        )
+
+        for result in results:
+            result["_id"] = str(result["_id"])
+
+        return results
+
+
+    def shortlist_candidate(
+        self,
+        search_id: str,
+        profile_id: str,
+    ):
+        result = self.search_results.update_one(
+            {
+                "search_id": search_id,
+                "profile_id": profile_id,
+            },
+            {
+                "$set": {
+                    "status": "SHORTLISTED",
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        return result.modified_count > 0
+
+
+    def reject_candidate(
+        self,
+        search_id: str,
+        profile_id: str,
+    ):
+        result = self.search_results.update_one(
+            {
+                "search_id": search_id,
+                "profile_id": profile_id,
+            },
+            {
+                "$set": {
+                    "status": "REJECTED",
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        return result.modified_count > 0
+
+
+    def undo_shortlist(
+        self,
+        search_id: str,
+        profile_id: str,
+    ):
+        result = self.search_results.update_one(
+            {
+                "search_id": search_id,
+                "profile_id": profile_id,
+                "status": "SHORTLISTED",
+            },
+            {
+                "$set": {
+                    "status": "PENDING",
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        return result.modified_count > 0
+
+
+    def undo_reject(
+        self,
+        search_id: str,
+        profile_id: str,
+    ):
+        result = self.search_results.update_one(
+            {
+                "search_id": search_id,
+                "profile_id": profile_id,
+                "status": "REJECTED",
+            },
+            {
+                "$set": {
+                    "status": "PENDING",
+                    "updated_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        return result.modified_count > 0
+
+
+    def get_shortlisted_candidates(
+        self,
+        search_id: str,
+    ):
+        results = list(
+            self.search_results.find(
+                {
+                    "search_id": search_id,
+                    "status": "SHORTLISTED",
+                }
+            ).sort("rank", 1)
+        )
+
+        for result in results:
+            result["_id"] = str(result["_id"])
+
+        return results
+
+
+    def get_rejected_candidates(
+        self,
+        search_id: str,
+    ):
+        results = list(
+            self.search_results.find(
+                {
+                    "search_id": search_id,
+                    "status": "REJECTED",
+                }
+            ).sort("rank", 1)
+        )
+
+        for result in results:
+            result["_id"] = str(result["_id"])
+
+        return results

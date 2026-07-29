@@ -6,7 +6,6 @@ from app.services.search.search_service import SearchService
 import traceback
 from app.config.logging import logger
 from app.repository.search_repository import SearchRepository
-from app.repository.job_repository import JobRepository
 from app.services.assistant.assistant_service import AssistantService
 from typing import Optional
 
@@ -17,14 +16,14 @@ router = APIRouter(
 assistant_service = AssistantService()
 search_service = SearchService()
 search_repository = SearchRepository()
-job_repository = JobRepository()
+
 
 # Search History
 @router.get(
     "/feed",
 )
 def search_history():
-    return job_repository.get_all_jobs()
+    return search_repository.get_all_search()
 
 
 # Search Candidates
@@ -61,14 +60,14 @@ def search_candidates(
 
 # Get Search Results
 @router.get(
-    "/job/{job_id}/conversation/{conversation_id}",
+    "/job/{search_id}/conversation/{conversation_id}",
 )
 def get_search_results(
-    job_id: str,
+    search_id: str,
     conversation_message_id: Optional[str] = None,
 ):
     results = search_repository.get_search_results(
-        job_id=job_id,
+        search_id=search_id,
         conversation_message_id=conversation_message_id,
     )
 
@@ -79,7 +78,7 @@ def get_search_results(
         )
 
     return {
-        "job_id": job_id,
+        "search_id": search_id,
         "conversation_message_id": conversation_message_id,
         "total_candidates": len(results),
         "results": results,
@@ -87,11 +86,11 @@ def get_search_results(
 
 #Get each chat
 @router.get(
-    "/job/{job_id}",
+    "/job/{search_id}",
 )
-def get_chat(job_id: str):
+def get_chat(search_id: str):
 
-    conversation = job_repository.get_chat(job_id)
+    conversation = search_repository.get_chat(search_id)
 
     if conversation is None:
 
@@ -103,15 +102,15 @@ def get_chat(job_id: str):
     return conversation
 # Candidate Reasoning
 @router.get(
-    "/job/{job_id}/profile/{profile_id}",
+    "/job/{search_id}/profile/{profile_id}",
 )
 def get_reasoning(
-    job_id: str,
+    search_id: str,
     profile_id: str,
 ):
     try:
         return search_service.get_candidate_reasoning(
-            job_id,
+            search_id,
             profile_id,
         )
     except Exception as e:
@@ -124,14 +123,14 @@ def get_reasoning(
 
 
 @router.get(
-    "/job/{job_id}",
+    "/job/{search_id}",
 )
 def get_conversation(
-    job_id: str,
+    search_id: str,
 ):
 
     assistant = AssistantService()
 
     return assistant.get_conversation_history(
-        job_id,
+        search_id,
     )

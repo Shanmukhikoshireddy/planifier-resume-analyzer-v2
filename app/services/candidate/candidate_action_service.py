@@ -1,11 +1,12 @@
 from app.repository.search_repository import SearchRepository
 from app.config.logging import logger
-
+from app.repository.job_vs_candidate_repository import JobVsCandidateRepository
 class CandidateActionService:
 
     def __init__(self):
 
         self.search_repository = SearchRepository()
+        self.job_vs_candidate_repository = JobVsCandidateRepository()
 
     ##########################################################
     # Common
@@ -13,36 +14,32 @@ class CandidateActionService:
 
     def _get_candidate(
         self,
-        job_id,
+        search_id,
         candidate_name,
     ):
 
         return self.search_repository.get_candidate_by_name(
-            job_id,
+            search_id,
             candidate_name,
         )
     
     def _get_candidate_by_profile_id(
         self,
-        job_id,
+        search_id,
         profile_id,
     ):
         return self.search_repository.get_candidate(
-            job_id,
+            search_id,
             profile_id,
         )
     
     def _perform_action(
         self,
         candidate,
-        job_id,
+        search_id,
         action,
         message,
     ):
-        """
-        Common helper for candidate actions.
-        """
-
         if candidate is None:
             return {
                 "success": False,
@@ -50,8 +47,10 @@ class CandidateActionService:
             }
 
         action(
-            job_id,
+            candidate["job_id"],
+            candidate["applicant_id"],
             candidate["profile_id"],
+            candidate.get("is_global_profile", False),
         )
 
         return {
@@ -66,76 +65,74 @@ class CandidateActionService:
 
     def shortlist_by_profile_id(
         self,
-        job_id,
+        search_id,
         profile_id,
     ):
 
         candidate = self._get_candidate_by_profile_id(
-            job_id,
+            search_id,
             profile_id,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.shortlist_candidate,
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
             message="{candidate_name} shortlisted successfully.",
         )
     
     def reject_by_profile_id(
         self,
-        job_id,
+        search_id,
         profile_id,
     ):
 
         candidate = self._get_candidate_by_profile_id(
-            job_id,
+            search_id,
             profile_id,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.reject_candidate,
-            message="{candidate_name} rejected successfully.",
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
+            message="{candidate_name} shortlisted successfully.",
         )
-    
 
     def undo_shortlist_by_profile_id(
         self,
-        job_id,
+        search_id,
         profile_id,
     ):
 
         candidate = self._get_candidate_by_profile_id(
-            job_id,
+            search_id,
             profile_id,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.undo_shortlist,
-            message="{candidate_name} removed from shortlist successfully.",
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
+            message="{candidate_name} shortlisted successfully.",
         )
-    
 
     def undo_reject_by_profile_id(
         self,
-        job_id,
+        search_id,
         profile_id,
     ):
 
         candidate = self._get_candidate_by_profile_id(
-            job_id,
+            search_id,
             profile_id,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.undo_reject,
-            message="{candidate_name} restored successfully.",
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
+            message="{candidate_name} shortlisted successfully.",
         )
 
     ##########################################################
@@ -144,19 +141,19 @@ class CandidateActionService:
 
     def shortlist(
         self,
-        job_id,
+        search_id,
         candidate_name,
     ):
 
         candidate = self._get_candidate(
-            job_id,
+            search_id,
             candidate_name,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.shortlist_candidate,
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
             message="{candidate_name} shortlisted successfully.",
         )
 
@@ -166,20 +163,20 @@ class CandidateActionService:
 
     def reject(
         self,
-        job_id,
+        search_id,
         candidate_name,
     ):
 
         candidate = self._get_candidate(
-            job_id,
+            search_id,
             candidate_name,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.reject_candidate,
-            message="{candidate_name} rejected successfully.",
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
+            message="{candidate_name} shortlisted successfully.",
         )
 
     ##########################################################
@@ -188,22 +185,22 @@ class CandidateActionService:
 
     def shortlisted(
         self,
-        job_id,
+        search_id,
     ):
 
         results= self.search_repository.get_shortlisted_candidates(
-            job_id
+            search_id
         )
         if not results:
             return {
-                "job_id": job_id,
+                "search_id": search_id,
                 "total_candidates": 0,
                 "message": "No shortlisted candidates found.",
                 "results": [],
             }
 
         return {
-            "job_id": job_id,
+            "search_id": search_id,
             "total_candidates": len(results),
             "results": results,
         }
@@ -216,22 +213,22 @@ class CandidateActionService:
 
     def rejected(
         self,
-        job_id,
+        search_id,
     ):
 
         results=self.search_repository.get_rejected_candidates(
-            job_id
+            search_id
         )
         if not results:
             return {
-                "job_id": job_id,
+                "search_id": search_id,
                 "total_candidates": 0,
                 "message": "No rejected candidates found.",
                 "results": [],
             }
 
         return {
-            "job_id": job_id,
+            "search_id": search_id,
             "total_candidates": len(results),
             "results": results,
         }
@@ -239,37 +236,37 @@ class CandidateActionService:
 
     def undo_shortlist(
         self,
-        job_id,
+        search_id,
         candidate_name,
     ):
 
         candidate = self._get_candidate(
-            job_id,
+            search_id,
             candidate_name,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.undo_shortlist,
-            message="{candidate_name} removed from shortlist successfully.",
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
+            message="{candidate_name} shortlisted successfully.",
         )
 
 
     def undo_reject(
         self,
-        job_id,
+        search_id,
         candidate_name,
     ):
 
         candidate = self._get_candidate(
-            job_id,
+            search_id,
             candidate_name,
         )
 
         return self._perform_action(
             candidate=candidate,
-            job_id=job_id,
-            action=self.search_repository.undo_reject,
-            message="{candidate_name} restored successfully.",
+            search_id=search_id,
+            action=self.job_vs_candidate_repository.shortlist_candidate,
+            message="{candidate_name} shortlisted successfully.",
         )

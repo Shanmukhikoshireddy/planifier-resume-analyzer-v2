@@ -1,6 +1,7 @@
 from app.config.settings import settings
 import math
 import re
+from app.config.logging import logger
 
 
 class ScoringService:
@@ -527,18 +528,45 @@ class ScoringService:
             ),
         )
 
-        education_score,\
-        education_match = self.education_score(
-            job.get(
-                "education",
-                "",
-            ),
-            " ".join(
-                candidate.get(
-                    "education",
-                    [],
+        candidate_education = candidate.get("education", [])
+
+        if candidate_education:
+
+            # New format -> list of dictionaries
+            if isinstance(candidate_education[0], dict):
+
+                education_text = " ".join(
+                    filter(
+                        None,
+                        [
+                            edu.get("degree", "")
+                            for edu in candidate_education
+                        ]
+                        +
+                        [
+                            edu.get("specialization", "")
+                            for edu in candidate_education
+                        ]
+                        +
+                        [
+                            edu.get("institution", "")
+                            for edu in candidate_education
+                        ]
+                    )
                 )
-            ),
+
+            # Old format -> list of strings
+            else:
+
+                education_text = " ".join(candidate_education)
+
+        else:
+
+            education_text = ""
+
+        education_score, education_match = self.education_score(
+            job.get("education", ""),
+            education_text,
         )
 
         certification_score,\
@@ -622,7 +650,7 @@ class ScoringService:
     # Score Candidates
     def score_candidates(
         self,
-        job_id: str,
+        search_id: str,
         job: dict,
         candidates: list,
         page: int,
@@ -740,7 +768,7 @@ class ScoringService:
 
         return self.generate_reasoning(
 
-            job_id=job_id,
+            search_id=search_id,
 
             candidates=scored_candidates,
 
