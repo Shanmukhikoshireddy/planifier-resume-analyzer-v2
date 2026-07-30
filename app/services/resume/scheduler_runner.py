@@ -1,6 +1,6 @@
 import threading
 from app.config.logging import logger
-from app.services.minio.minio_scheduler import MinioScheduler
+from app.services.resume.resume_scheduler import ResumeScheduler
 
 _scheduler_thread = None
 def start_scheduler():
@@ -11,19 +11,19 @@ def start_scheduler():
         _scheduler_thread.is_alive()
     ):
         logger.info(
-            "MinIO Scheduler already running."
+            "Resume Scheduler already running."
         )
         return
     logger.info(
-        "Starting MinIO Scheduler..."
+        "Starting Resume Scheduler..."
     )
-    scheduler = MinioScheduler()
+    scheduler = ResumeScheduler()
     _scheduler_thread = threading.Thread(
         target=scheduler.run,
         daemon=True,
-        name="MinioScheduler",
+        name="ResumeScheduler",
     )
     _scheduler_thread.start()
     logger.info(
-        "MinIO Scheduler Started."
+        "Resume Scheduler Started."
     )

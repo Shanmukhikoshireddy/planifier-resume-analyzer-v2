@@ -65,14 +65,7 @@ class IntentRouter:
                     ),
                 )
 
-        # Search modification must always have an existing search
-        elif intent == "SEARCH_MODIFICATION":
 
-            if not conversation.get("current_search"):
-                raise HTTPException(
-                    status_code=400,
-                    detail="No active search found to modify.",
-                )
 
         handlers = {
             "SEARCH": assistant.handle_search,

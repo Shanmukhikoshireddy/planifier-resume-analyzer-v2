@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 from app.config.mongo import db
-from app.repository.minio_repository import MinioRepository
 from app.services.shared.openai_service import OpenAIService
 from app.services.ingestion.embedding_service import EmbeddingService
 router = APIRouter(
@@ -18,15 +17,6 @@ def health_check():
     except Exception as e:
         status["mongodb"] = f"DOWN : {str(e)}"
 
-    # MinIO
-    try:
-        minio = MinioRepository()
-        if minio.bucket_exists():
-            status["minio"] = "UP"
-        else:
-            status["minio"] = "Bucket Not Found"
-    except Exception as e:
-        status["minio"] = f"DOWN : {str(e)}"
 
     # OpenAI
     try:

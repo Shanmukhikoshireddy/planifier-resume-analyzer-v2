@@ -16,7 +16,7 @@ class ConversationMessageRepository(BaseRepository):
 
     def create_message(
         self,
-        conversation_id: str,
+        search_id: str,
         user_prompt: str,
         intent: str,
         assistant_message: str = "",
@@ -25,7 +25,7 @@ class ConversationMessageRepository(BaseRepository):
 
         document = {
 
-            "conversation_id": ObjectId(conversation_id),
+            "search_id": ObjectId(search_id),
 
             "user_prompt": user_prompt,
 

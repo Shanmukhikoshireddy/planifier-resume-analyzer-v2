@@ -37,7 +37,8 @@ class CandidateActionService:
         self,
         candidate,
         search_id,
-        action,
+        search_action,
+        job_action,
         message,
     ):
         if candidate is None:
@@ -46,8 +47,16 @@ class CandidateActionService:
                 "message": "Candidate not found.",
             }
 
-        action(
+        # Update search_results
+        search_action(
+            search_id,
+            candidate["profile_id"],
+        )
+
+        # Update job_vs_candidates
+        job_action(
             candidate["job_id"],
+            search_id,
             candidate["applicant_id"],
             candidate["profile_id"],
             candidate.get("is_global_profile", False),
@@ -77,7 +86,8 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
+            search_action=self.search_repository.shortlist_candidate,
+            job_action=self.job_vs_candidate_repository.shortlist_candidate,
             message="{candidate_name} shortlisted successfully.",
         )
     
@@ -95,26 +105,9 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
-            message="{candidate_name} shortlisted successfully.",
-        )
-
-    def undo_shortlist_by_profile_id(
-        self,
-        search_id,
-        profile_id,
-    ):
-
-        candidate = self._get_candidate_by_profile_id(
-            search_id,
-            profile_id,
-        )
-
-        return self._perform_action(
-            candidate=candidate,
-            search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
-            message="{candidate_name} shortlisted successfully.",
+            search_action=self.search_repository.reject_candidate,
+            job_action=self.job_vs_candidate_repository.reject_candidate,
+            message="{candidate_name} rejected successfully.",
         )
 
     def undo_reject_by_profile_id(
@@ -131,8 +124,28 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
-            message="{candidate_name} shortlisted successfully.",
+            search_action=self.search_repository.undo_reject,
+            job_action=self.job_vs_candidate_repository.undo_reject,
+            message="{candidate_name} moved back to pending.",
+        )
+
+    def undo_shortlist_by_profile_id(
+        self,
+        search_id,
+        profile_id,
+    ):
+
+        candidate = self._get_candidate_by_profile_id(
+            search_id,
+            profile_id,
+        )
+
+        return self._perform_action(
+            candidate=candidate,
+            search_id=search_id,
+            search_action=self.search_repository.undo_shortlist,
+            job_action=self.job_vs_candidate_repository.undo_shortlist,
+            message="{candidate_name} moved back to pending.",
         )
 
     ##########################################################
@@ -153,7 +166,8 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
+            search_action=self.search_repository.shortlist_candidate,
+            job_action=self.job_vs_candidate_repository.shortlist_candidate,
             message="{candidate_name} shortlisted successfully.",
         )
 
@@ -175,8 +189,9 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
-            message="{candidate_name} shortlisted successfully.",
+            search_action=self.search_repository.reject_candidate,
+            job_action=self.job_vs_candidate_repository.reject_candidate,
+            message="{candidate_name} rejected successfully.",
         )
 
     ##########################################################
@@ -188,7 +203,7 @@ class CandidateActionService:
         search_id,
     ):
 
-        results= self.search_repository.get_shortlisted_candidates(
+        results = self.job_vs_candidate_repository.get_shortlisted_candidates(
             search_id
         )
         if not results:
@@ -248,8 +263,9 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
-            message="{candidate_name} shortlisted successfully.",
+            search_action=self.search_repository.undo_shortlist,
+            job_action=self.job_vs_candidate_repository.undo_shortlist,
+            message="{candidate_name} moved back to pending.",
         )
 
 
@@ -267,6 +283,7 @@ class CandidateActionService:
         return self._perform_action(
             candidate=candidate,
             search_id=search_id,
-            action=self.job_vs_candidate_repository.shortlist_candidate,
-            message="{candidate_name} shortlisted successfully.",
+            search_action=self.search_repository.undo_reject,
+            job_action=self.job_vs_candidate_repository.undo_reject,
+            message="{candidate_name} moved back to pending.",
         )

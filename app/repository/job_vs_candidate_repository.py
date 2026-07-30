@@ -10,9 +10,15 @@ class JobVsCandidateRepository(BaseRepository):
     def __init__(self):
         super().__init__()
         self.collection = self.db[self.collection_name]
+
+    ##########################################################
+    # Common Save / Update
+    ##########################################################
+
     def save_or_update_candidate_status(
         self,
         job_id: str,
+        search_id: str,
         applicant_id: str,
         profile_id: str,
         is_global_profile: bool,
@@ -22,6 +28,7 @@ class JobVsCandidateRepository(BaseRepository):
         self.collection.update_one(
             {
                 "job_id": job_id,
+                "search_id": search_id,
                 "profile_id": profile_id,
             },
             {
@@ -33,6 +40,7 @@ class JobVsCandidateRepository(BaseRepository):
                 },
                 "$setOnInsert": {
                     "job_id": job_id,
+                    "search_id": search_id,
                     "profile_id": profile_id,
                     "created_at": datetime.utcnow(),
                 },
@@ -42,95 +50,132 @@ class JobVsCandidateRepository(BaseRepository):
 
         return True
 
+    ##########################################################
+    # Shortlist
+    ##########################################################
+
     def shortlist_candidate(
         self,
         job_id,
+        search_id,
         applicant_id,
         profile_id,
         is_global_profile,
     ):
         return self.save_or_update_candidate_status(
-            job_id,
-            applicant_id,
-            profile_id,
-            is_global_profile,
-            "SHORTLISTED",
+            job_id=job_id,
+            search_id=search_id,
+            applicant_id=applicant_id,
+            profile_id=profile_id,
+            is_global_profile=is_global_profile,
+            status="SHORTLISTED",
         )
 
+    ##########################################################
+    # Reject
+    ##########################################################
 
     def reject_candidate(
         self,
         job_id,
+        search_id,
         applicant_id,
         profile_id,
         is_global_profile,
     ):
         return self.save_or_update_candidate_status(
-            job_id,
-            applicant_id,
-            profile_id,
-            is_global_profile,
-            "REJECTED",
+            job_id=job_id,
+            search_id=search_id,
+            applicant_id=applicant_id,
+            profile_id=profile_id,
+            is_global_profile=is_global_profile,
+            status="REJECTED",
         )
 
+    ##########################################################
+    # Undo Shortlist
+    ##########################################################
 
     def undo_shortlist(
         self,
         job_id,
+        search_id,
         applicant_id,
         profile_id,
         is_global_profile,
     ):
         return self.save_or_update_candidate_status(
-            job_id,
-            applicant_id,
-            profile_id,
-            is_global_profile,
-            "PENDING",
+            job_id=job_id,
+            search_id=search_id,
+            applicant_id=applicant_id,
+            profile_id=profile_id,
+            is_global_profile=is_global_profile,
+            status="PENDING",
         )
 
+    ##########################################################
+    # Undo Reject
+    ##########################################################
 
     def undo_reject(
         self,
         job_id,
+        search_id,
         applicant_id,
         profile_id,
         is_global_profile,
     ):
         return self.save_or_update_candidate_status(
-            job_id,
-            applicant_id,
-            profile_id,
-            is_global_profile,
-            "PENDING",
+            job_id=job_id,
+            search_id=search_id,
+            applicant_id=applicant_id,
+            profile_id=profile_id,
+            is_global_profile=is_global_profile,
+            status="PENDING",
         )
 
+    ##########################################################
+    # Get Shortlisted Candidates
+    ##########################################################
 
     def get_shortlisted_candidates(
         self,
-        job_id,
+        search_id,
     ):
 
-        return list(
+        results = list(
             self.collection.find(
                 {
-                    "job_id": job_id,
+                    "search_id": search_id,
                     "status": "SHORTLISTED",
                 }
             )
         )
 
+        for result in results:
+            result["_id"] = str(result["_id"])
+
+        return results
+
+    ##########################################################
+    # Get Rejected Candidates
+    ##########################################################
 
     def get_rejected_candidates(
         self,
-        job_id,
+        search_id,
     ):
 
-        return list(
+        results = list(
             self.collection.find(
                 {
-                    "job_id": job_id,
+                    "search_id": search_id,
                     "status": "REJECTED",
                 }
             )
         )
+
+        for result in results:
+            result["_id"] = str(result["_id"])
+
+        return results

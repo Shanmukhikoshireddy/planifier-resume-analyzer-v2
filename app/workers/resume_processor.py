@@ -91,7 +91,6 @@ class ResumeProcessor:
                 raw_text
             )
 
-            # Derive Job Position From MinIO Folder
             # Get Job Position from job_positions collection
             job = self.job_position_repository.get_job_position(job_id)
 

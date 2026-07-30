@@ -3,7 +3,7 @@ from app.repository.base_repository import BaseRepository
 
 class MetadataRepository(BaseRepository):
     """
-    Stores processed MinIO objects.
+    Stores processed Resume objects.
 
     This collection is used by the scheduler to avoid
     processing the same object multiple times.

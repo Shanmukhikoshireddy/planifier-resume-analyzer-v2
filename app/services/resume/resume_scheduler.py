@@ -6,7 +6,7 @@ from app.workers.resume_processor import ResumeProcessor
 from app.repository.applicant_repository import ApplicantRepository
 
 
-class MinioScheduler:
+class ResumeScheduler:
 
     def __init__(self):
         self.resume_processor = ResumeProcessor()
