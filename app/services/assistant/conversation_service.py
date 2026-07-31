@@ -249,7 +249,19 @@ class ConversationService:
         self,
         conversation: dict,
         message,
+        conversation_message_id: str = None,
     ):
+
+        # Attach conversation message id only for search responses
+        if (
+            conversation_message_id
+            and isinstance(message, dict)
+            and message.get("type") in (
+                "SEARCH",
+                "SEARCH_MODIFICATION",
+            )
+        ):
+            message["conversation_message_id"] = conversation_message_id
 
         conversation.setdefault(
             "messages",
@@ -260,11 +272,11 @@ class ConversationService:
                 "content": message,
             }
         )
+
         self.save(
             conversation["search_id"],
             conversation,
         )
-
 
         return conversation
 

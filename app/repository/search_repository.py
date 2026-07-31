@@ -212,6 +212,44 @@ class SearchRepository(BaseRepository):
         if document is None:
             return None
 
+        conversation = document.get(
+            "conversation",
+            {},
+        )
+
+        messages = conversation.get(
+            "messages",
+            [],
+        )
+
+        for message in messages:
+
+            if message.get("role") != "assistant":
+                continue
+
+            content = message.get("content")
+
+            if not isinstance(content, dict):
+                continue
+
+            if content.get("type") not in (
+                "SEARCH",
+                "SEARCH_MODIFICATION",
+            ):
+                continue
+
+            conversation_message_id = content.get(
+                "conversation_message_id"
+            )
+
+            if not conversation_message_id:
+                continue
+
+            content["search_results"] = self.get_search_results(
+                search_id=search_id,
+                conversation_message_id=conversation_message_id,
+            )
+
         return {
 
             "search_id": str(document["_id"]),
@@ -229,10 +267,8 @@ class SearchRepository(BaseRepository):
                 0,
             ),
 
-            "conversation": document.get(
-                "conversation",
-                {},
-            ),
+            "conversation": conversation,
+
         }
     # Delete Job
     def delete_search(
@@ -382,37 +418,39 @@ class SearchRepository(BaseRepository):
         search_id: str,
         role: str,
         content,
+        conversation_message_id: str = None,
     ):
+        message = {
+            "role": role,
+            "content": content,
+            "timestamp": datetime.utcnow(),
+        }
+
+        if (
+            role == "assistant"
+            and isinstance(content, dict)
+            and content.get("type") in (
+                "SEARCH",
+                "SEARCH_MODIFICATION",
+            )
+            and conversation_message_id
+        ):
+            message["content"]["conversation_message_id"] = (
+                conversation_message_id
+            )
 
         self.collection.update_one(
-
             {
                 "_id": ObjectId(search_id)
             },
-
             {
                 "$push": {
-
-                    "conversation.messages": {
-
-                        "role": role,
-
-                        "content": content,
-
-                        "timestamp": datetime.utcnow(),
-
-                    }
-
+                    "conversation.messages": message
                 },
-
                 "$set": {
-
-                    "updated_at": datetime.utcnow(),
-
+                    "updated_at": datetime.utcnow()
                 }
-
             }
-
         )
 
 

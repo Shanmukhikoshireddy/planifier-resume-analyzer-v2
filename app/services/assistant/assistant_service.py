@@ -315,15 +315,19 @@ class AssistantService:
 
         self.conversation_service.add_assistant_message(
 
-            conversation,
+            conversation=conversation,
 
-            {
+            message={
 
                 "type": message_type,
 
                 "results": response["total_candidates"],
 
             },
+
+            conversation_message_id=conversation[
+                "conversation_message_id"
+            ],
 
         )
 
