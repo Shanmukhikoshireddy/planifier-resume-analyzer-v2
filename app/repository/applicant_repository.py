@@ -1,5 +1,5 @@
 from bson import ObjectId
-
+from datetime import datetime
 from app.repository.base_repository import BaseRepository
 from app.config.logging import logger
 from app.config.mongo import planifier_db
@@ -14,9 +14,10 @@ class ApplicantRepository:
         applicants = list(
             self.collection.find(
                 {
-                    "AI_SYNC_STATUS": {
-                        "$in": ["PENDING", "FAILED"]
-                    }
+                    "$or": [
+                        {"AI_SYNC_STATUS": {"$exists": False}},
+                        {"AI_SYNC_STATUS": {"$in": ["PENDING", "FAILED"]}}
+                    ]
                 }
             )
         )
@@ -69,3 +70,20 @@ class ApplicantRepository:
             del applicant["_id"]
 
         return applicants
+
+    def update_status(
+        self,
+        applicant_id,
+        status,
+    ):
+        self.collection.update_one(
+            {
+                "_id": ObjectId(applicant_id)
+            },
+            {
+                "$set": {
+                    "status": status,
+                    "updatedAt": datetime.utcnow(),
+                }
+            }
+        )

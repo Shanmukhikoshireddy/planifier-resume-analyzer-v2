@@ -851,3 +851,21 @@ class SearchRepository(BaseRepository):
             result["_id"] = str(result["_id"])
 
         return results
+
+    def get_shortlisted_candidates(
+            self,
+            search_id: str,
+        ):
+            results = list(
+                self.search_results.find(
+                    {
+                        "search_id": search_id,
+                        "status": "SHORTLISTED",
+                    }
+                ).sort("rank", 1)
+            )
+    
+            for result in results:
+                result["_id"] = str(result["_id"])
+    
+            return results

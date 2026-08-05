@@ -1,12 +1,14 @@
 from app.repository.search_repository import SearchRepository
 from app.config.logging import logger
 from app.repository.job_vs_candidate_repository import JobVsCandidateRepository
+from app.repository.applicant_repository import ApplicantRepository
 class CandidateActionService:
 
     def __init__(self):
 
         self.search_repository = SearchRepository()
         self.job_vs_candidate_repository = JobVsCandidateRepository()
+        self.applicant_repository = ApplicantRepository()
 
     ##########################################################
     # Common
@@ -39,6 +41,7 @@ class CandidateActionService:
         search_id,
         search_action,
         job_action,
+        applicant_status,
         message,
     ):
         if candidate is None:
@@ -60,6 +63,10 @@ class CandidateActionService:
             candidate["applicant_id"],
             candidate["profile_id"],
             candidate.get("is_global_profile", False),
+        )
+        self.applicant_repository.update_status(
+            candidate["applicant_id"],
+            applicant_status,
         )
 
         return {
@@ -88,6 +95,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.shortlist_candidate,
             job_action=self.job_vs_candidate_repository.shortlist_candidate,
+            applicant_status="SHORTLISTED",
             message="{candidate_name} shortlisted successfully.",
         )
     
@@ -107,6 +115,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.reject_candidate,
             job_action=self.job_vs_candidate_repository.reject_candidate,
+            applicant_status="REJECTED",
             message="{candidate_name} rejected successfully.",
         )
 
@@ -126,6 +135,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.undo_reject,
             job_action=self.job_vs_candidate_repository.undo_reject,
+            applicant_status="DRAFT",
             message="{candidate_name} moved back to pending.",
         )
 
@@ -145,6 +155,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.undo_shortlist,
             job_action=self.job_vs_candidate_repository.undo_shortlist,
+            applicant_status="DRAFT",
             message="{candidate_name} moved back to pending.",
         )
 
@@ -168,6 +179,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.shortlist_candidate,
             job_action=self.job_vs_candidate_repository.shortlist_candidate,
+            applicant_status="SHORTLISTED",
             message="{candidate_name} shortlisted successfully.",
         )
 
@@ -191,6 +203,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.reject_candidate,
             job_action=self.job_vs_candidate_repository.reject_candidate,
+            applicant_status="REJECTED",
             message="{candidate_name} rejected successfully.",
         )
 
@@ -203,7 +216,7 @@ class CandidateActionService:
         search_id,
     ):
 
-        results = self.job_vs_candidate_repository.get_shortlisted_candidates(
+        results = self.search_repository.get_shortlisted_candidates(
             search_id
         )
         if not results:
@@ -265,6 +278,7 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.undo_shortlist,
             job_action=self.job_vs_candidate_repository.undo_shortlist,
+            applicant_status="DRAFT",
             message="{candidate_name} moved back to pending.",
         )
 
@@ -285,5 +299,6 @@ class CandidateActionService:
             search_id=search_id,
             search_action=self.search_repository.undo_reject,
             job_action=self.job_vs_candidate_repository.undo_reject,
+            applicant_status="DRAFT",
             message="{candidate_name} moved back to pending.",
         )

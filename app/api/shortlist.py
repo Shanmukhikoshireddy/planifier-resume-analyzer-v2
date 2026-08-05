@@ -11,7 +11,7 @@ candidate_action_service = CandidateActionService()
 
 # Shortlist Candidate
 @router.post(
-    "/jod/{search_id}/profile/{profile_id}",
+    "/job/{search_id}/profile/{profile_id}",
 )
 def shortlist_candidate(
     search_id: str,

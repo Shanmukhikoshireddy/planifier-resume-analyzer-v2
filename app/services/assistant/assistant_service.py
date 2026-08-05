@@ -35,8 +35,6 @@ class AssistantService:
         self.search_repository = SearchRepository()
 
     # Main Entry
-
-
     def process(
         self,
         request,
@@ -44,9 +42,7 @@ class AssistantService:
         page_size,
     ):
 
-        # -------------------------------------------------------
         # Load / Create Conversation
-        # -------------------------------------------------------
 
         if request.search_id:
 
@@ -61,9 +57,7 @@ class AssistantService:
 
             conversation = self.conversation_service.create()
 
-        # -------------------------------------------------------
         # Detect Intent
-        # -------------------------------------------------------
 
         intent_result = self.prompt_parser.detect_intent(
             request.prompt
@@ -99,23 +93,17 @@ class AssistantService:
 
         logger.info(f"Final Intent : {intent}")
 
-        # -------------------------------------------------------
         # Default values
-        # -------------------------------------------------------
 
         job_position = None
 
-        # -------------------------------------------------------
         # SEARCH / SEARCH MODIFICATION
-        # -------------------------------------------------------
 
         if intent in ["SEARCH", "SEARCH_MODIFICATION"]:
 
-            # ---------------------------------------
             # SEARCH MODIFICATION
-            # ---------------------------------------
 
-            if intent == "SEARCH_MODIFICATION":
+            if intent == "SEARCH_MODIFICATION" and request.search_id :
 
                 search = self.search_repository.get_search(
                     request.search_id
@@ -133,9 +121,7 @@ class AssistantService:
                     "parsed_search": search_result["job"],
                 }
 
-            # ---------------------------------------
             # NEW SEARCH
-            # ---------------------------------------
 
             else:
 
@@ -184,9 +170,7 @@ class AssistantService:
 
             parsed = intent_result
 
-        # -------------------------------------------------------
         # Save User Message
-        # -------------------------------------------------------
 
         conversation_message_id = (
             self.conversation_message_repository.create_message(
@@ -205,9 +189,7 @@ class AssistantService:
             request.prompt,
         )
 
-        # -------------------------------------------------------
         # Route Intent
-        # -------------------------------------------------------
 
         try:
 
