@@ -1,7 +1,7 @@
 from datetime import datetime
 from bson import ObjectId
 from app.repository.base_repository import BaseRepository
-
+from app.config.logging import logger
 class SearchRepository(BaseRepository):
     def __init__(self):
         super().__init__()
@@ -24,7 +24,7 @@ class SearchRepository(BaseRepository):
             "job_position_id": job_position_id,
 
             "parsed_search": parsed_search,
-
+            
             "global_search_allowed": global_search_allowed,
             "original_prompt": original_prompt,
             "search_embedding": embedding,

@@ -39,6 +39,86 @@ class RerankerService:
         )[0]
         return float(score)
 
+    def _build_candidate_text(
+        self,
+        candidate: dict,
+    ) -> str:
+
+        sections = []
+
+        if candidate.get("designation"):
+            sections.append(
+                f"Designation: {candidate['designation']}"
+            )
+
+        if candidate.get("experience_years") is not None:
+            sections.append(
+                f"Experience: {candidate['experience_years']} years"
+            )
+
+        if candidate.get("summary"):
+            sections.append(
+                f"Summary: {candidate['summary']}"
+            )
+
+        skills = candidate.get("skills", [])
+        if skills:
+            sections.append(
+                "Skills: " + ", ".join(skills)
+            )
+
+        education = candidate.get("education", [])
+        if education:
+            if isinstance(education, list):
+                sections.append(
+                    "Education: " + ", ".join(
+                        [str(e) for e in education]
+                    )
+                )
+            else:
+                sections.append(
+                    f"Education: {education}"
+                )
+
+        projects = candidate.get("projects", [])
+        if projects:
+            if isinstance(projects, list):
+                project_names = []
+
+                for project in projects:
+
+                    if isinstance(project, dict):
+                        project_names.append(
+                            project.get(
+                                "title",
+                                project.get(
+                                    "name",
+                                    "",
+                                ),
+                            )
+                        )
+                    else:
+                        project_names.append(str(project))
+
+                sections.append(
+                    "Projects: " + ", ".join(project_names)
+                )
+
+        certifications = candidate.get(
+            "certifications",
+            [],
+        )
+
+        if certifications:
+            sections.append(
+                "Certifications: "
+                + ", ".join(
+                    [str(c) for c in certifications]
+                )
+            )
+
+        return "\n".join(sections)
+
     # Batch Rerank
     def rerank_candidates(
         self,
@@ -48,8 +128,8 @@ class RerankerService:
         pairs = [
             (
                 job_text,
-                candidate["resume_text"],
-            )
+                self._build_candidate_text(candidate),
+            ) 
             for candidate in candidates
         ]
         scores = self.model.predict(

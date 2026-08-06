@@ -128,9 +128,14 @@ class AssistantService:
                 # Global Search
                 if request.global_search_allowed:
 
-                    job_position = None
-
                     merged_prompt = request.prompt
+
+                    if request.job_position_id:
+                        job_position = self.job_position_repository.get_job_position(
+                            request.job_position_id
+                        )
+                    else:
+                        job_position = None
 
                 # Job-based Search
                 else:
@@ -143,6 +148,7 @@ class AssistantService:
                     job_position = self.job_position_repository.get_job_position(
                         request.job_position_id
                     )
+                    logger.info(f"Fetched Job Position: {job_position}")
 
                     if job_position is None:
                         raise Exception("Job Position not found.")
@@ -357,6 +363,10 @@ class AssistantService:
         page,
         page_size,
     ):
+        logger.info("=" * 80)
+        logger.info(f"Request Job ID : {request.job_position_id}")
+        logger.info(f"Job Position   : {job_position}")
+        logger.info("=" * 80)
 
         merged_search = self.conversation_service.merge_search(
             conversation,

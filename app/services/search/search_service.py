@@ -65,6 +65,7 @@ class SearchService:
 
         logger.info("=" * 80)
         logger.info("SEARCH PIPELINE STARTED")
+
         logger.info("=" * 80)
 
         search_id = search_context["search_id"]
@@ -397,6 +398,12 @@ class SearchService:
         for profile in vector_results:
 
             profile["semantic_score"] = profile.pop("embedding_score", 0)
+            if not job_position_id:
+                profile["is_global_profile"] = True
+            else:
+                profile["is_global_profile"] = (
+                    profile.get("job_id") != job_position_id
+                )
 
             candidates.append(profile)
 

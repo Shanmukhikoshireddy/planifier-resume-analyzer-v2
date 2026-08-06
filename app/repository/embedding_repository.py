@@ -83,10 +83,10 @@ class EmbeddingRepository(BaseRepository):
 
         vector_search = {
             "index": "resume_vector_index",
-            "path": "embedding",
+            "path": "profile_embedding",
             "queryVector": embedding,
-            "numCandidates": 10000,
-            "limit": 10000,
+            "numCandidates": 1000,
+            "limit": 1000,
         }
 
         # Apply filter only when required

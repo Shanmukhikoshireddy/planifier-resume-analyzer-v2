@@ -213,8 +213,8 @@ class ProfileRepository(BaseRepository):
                 "index": "resume_vector_index",
                 "path": "profile_embedding",
                 "queryVector": embedding,
-                "numCandidates": 10000,
-                "limit": 10000,
+                "numCandidates": 1000,
+                "limit": 1000,
             }
     
             # Apply filter only when required
@@ -238,6 +238,7 @@ class ProfileRepository(BaseRepository):
                         "applicant_id": 1,
 
                         "job_id": 1,
+                        "is_global_profile": 1, 
 
                         "candidate_name": 1,
 
