@@ -1,5 +1,5 @@
 from copy import deepcopy
-
+from app.config.logging import logger
 from app.repository.search_repository import SearchRepository
 from app.utils.context_merger import ContextMerger
 
@@ -19,19 +19,15 @@ class ConversationService:
         search_id: str,
     ):
 
-        if not search_id:
-            return None
-
         conversation = self.search_repository.get_conversation(
             search_id
         )
 
-        if not conversation:
-            return self.create()
+        if conversation:
+            conversation["search_id"] = search_id
+            return conversation
 
-        conversation["search_id"] = search_id
-
-        return conversation
+        return self.create(search_id)
 
     ###########################################################
     # Create Empty Conversation
@@ -40,33 +36,19 @@ class ConversationService:
     def create(
         self,
     ):
-
         search_id = self.search_repository.create_empty_search()
 
         conversation = {
-
             "search_id": search_id,
-
             "messages": [],
-
             "current_search": {},
-
             "latest_search_id": None,
-
             "context_summary": "",
-
         }
 
-        self.save(
-
-            search_id,
-
-            conversation,
-
-        )
+        self.save(search_id, conversation)
 
         return conversation
-
     ###########################################################
     # Build Context
     ###########################################################

@@ -93,7 +93,10 @@ class SearchService:
 
         # Generate Embedding
 
-
+        logger.info("=" * 80)
+        logger.info("EMBEDDING TEXT")
+        logger.info(job_text)
+        logger.info("=" * 80)
         embedding = self.embedding_service.generate_embedding(
             job_text
         )
@@ -108,13 +111,13 @@ class SearchService:
         self.search_repository.update_search(
             search_id=search_id,
             update_fields={
-
+                "title": parsed_search.get("title", ""),
+                "job_position_id": job_position_id,
                 "parsed_search": parsed_search,
-
                 "search_embedding": embedding,
-
                 "original_prompt": original_prompt,
-
+                "received_within": received_within,
+                "global_search_allowed": global_search_allowed,
             },
         )
 
@@ -350,7 +353,130 @@ class SearchService:
         )
     
 
+    ############################################################
+    # Refine Previous Results
+    ############################################################
 
+    def refine_previous_results(
+        self,
+        search_context: dict,
+        page: int,
+        page_size: int,
+        conversation_message_id: str,
+    ):
+
+        logger.info("=" * 80)
+        logger.info("REFINING PREVIOUS SEARCH")
+        logger.info("=" * 80)
+
+        search_id = search_context["search_id"]
+
+        parsed_search = search_context["parsed_search"]
+
+        job_text = self.build_search_embedding_text(
+            parsed_search
+        )
+
+        previous_candidates = (
+            self.search_repository.get_latest_search_results(
+                search_id
+            )
+        )
+
+        logger.info(
+            f"Loaded {len(previous_candidates)} previous candidates."
+        )
+
+        if not previous_candidates:
+
+            logger.warning(
+                "No previous candidates found. Falling back to vector search."
+            )
+
+            return self.search(
+                search_context=search_context,
+                page=page,
+                page_size=page_size,
+                conversation_message_id=conversation_message_id,
+            )
+
+        #
+        # Remove Mongo document id
+        #
+
+        cleaned_candidates = []
+
+        for candidate in previous_candidates:
+
+            candidate.pop("_id", None)
+
+            candidate.pop("search_id", None)
+
+            candidate.pop("conversation_message_id", None)
+
+            candidate.pop("created_at", None)
+
+            candidate.pop("status", None)
+
+            candidate.pop("rank", None)
+
+            cleaned_candidates.append(candidate)
+
+        #
+        # Apply updated filters
+        #
+
+        candidates = self.candidate_filter_service.filter(
+
+            cleaned_candidates,
+
+            parsed_search,
+
+        )
+
+        logger.info(
+            f"After refinement filters : {len(candidates)}"
+        )
+
+        if not candidates:
+
+            return {
+
+                "search_id": search_id,
+
+                "page": page,
+
+                "page_size": page_size,
+
+                "total_candidates": 0,
+
+                "total_pages": 0,
+
+                "results": [],
+
+            }
+
+        #
+        # Continue existing pipeline
+        #
+
+        return self.rerank_candidates(
+
+            search_id=search_id,
+
+            parsed_search=parsed_search,
+
+            job_text=job_text,
+
+            candidates=candidates,
+
+            page=page,
+
+            page_size=page_size,
+
+            conversation_message_id=conversation_message_id,
+
+        )
 ######
     # Vector Search######
 
@@ -409,6 +535,22 @@ class SearchService:
 
         logger.info(
             f"Loaded {len(candidates)} candidate profiles."
+        )
+        shortlisted_profile_ids = (
+            self.search_repository.get_shortlisted_profile_ids(
+                search_id
+            )
+        )
+
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate["profile_id"]
+            not in shortlisted_profile_ids
+        ]
+
+        logger.info(
+            f"After removing shortlisted: {len(candidates)}"
         )
 
 

@@ -253,10 +253,11 @@ class ScoringService:
                 [],
             )
 
-        candidate_skill_set = {
+        candidate_skill_set = [
             self.normalize_skill(skill)
             for skill in candidate_skills
-        }
+            if skill
+        ]
 
         matched = []
         missing = []
@@ -268,20 +269,35 @@ class ScoringService:
 
             primary_skill = required.get("skill", "")
 
-            search_terms = required.get("search_terms", [])
-
-            normalized_terms = {
+            search_terms = [
                 self.normalize_skill(term)
-                for term in search_terms
+                for term in required.get(
+                    "search_terms",
+                    []
+                )
                 if term
-            }
+            ]
 
-            if candidate_skill_set.intersection(normalized_terms):
+            found = False
+
+            for term in search_terms:
+
+                if any(
+                    term in skill or skill in term
+                    for skill in candidate_skill_set
+                ):
+                    found = True
+                    break
+
+            if found:
                 matched.append(primary_skill)
             else:
                 missing.append(primary_skill)
 
-        ratio = len(matched) / max(len(required_skills), 1)
+        ratio = len(matched) / max(
+            len(required_skills),
+            1,
+        )
 
         score = ratio * self.required_skill_weight
 
@@ -290,7 +306,6 @@ class ScoringService:
             matched,
             missing,
         )
-
     # Preferred Skill Bonus
 
     def preferred_skill_score(
@@ -335,7 +350,18 @@ class ScoringService:
                 if term
             }
 
-            if candidate_skill_set.intersection(normalized_terms):
+            found = False
+
+            for term in normalized_terms:
+
+                if any(
+                    term in skill or skill in term
+                    for skill in candidate_skill_set
+                ):
+                    found = True
+                    break
+
+            if found:
                 matched.append(primary_skill)
 
         ratio = len(matched) / max(len(preferred_skills), 1)

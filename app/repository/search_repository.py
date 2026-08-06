@@ -43,6 +43,22 @@ class SearchRepository(BaseRepository):
         result = self.collection.insert_one(document)
         return str(result.inserted_id)
 
+    def get_latest_search_results(
+        self,
+        search_id: str,
+    ):
+
+        latest_search_id = self.get_latest_search_id(
+            search_id
+        )
+
+        if not latest_search_id:
+            return []
+
+        return self.get_results_by_conversation_message(
+            latest_search_id
+        )
+
     # Update Job
     def update_search(
         self,
@@ -135,6 +151,24 @@ class SearchRepository(BaseRepository):
                 "created_at"
             ),
 
+        }
+    def get_shortlisted_profile_ids(
+        self,
+        search_id: str,
+    ):
+        results = self.search_results.find(
+            {
+                "search_id": search_id,
+                "status": "SHORTLISTED",
+            },
+            {
+                "profile_id": 1,
+            },
+        )
+
+        return {
+            result["profile_id"]
+            for result in results
         }
     # Get All Jobs (Sidebar)
     def get_all_search(self):
@@ -343,16 +377,22 @@ class SearchRepository(BaseRepository):
 
     # Latest Job
     def get_latest_search(self):
+
         job = self.collection.find_one(
+            {
+                "status": {
+                    "$ne": "NEW"
+                }
+            },
             sort=[
-                ("created_at", -1)
+                ("updated_at", -1)
             ]
         )
+
         if job:
             job["_id"] = str(job["_id"])
-        return job
-    
 
+        return job
 
     ############################################################
     # Get Conversation

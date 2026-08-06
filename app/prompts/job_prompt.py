@@ -57,23 +57,54 @@ Return ONLY
 Rules
 
 1. Combine both Job Description and Recruiter Instructions.
-2. Recruiter Instructions override the Job Description when there is a conflict.
-3. Never invent information.
-4. Extract only explicitly mentioned requirements.
-5. Remove duplicates.
-6. Normalize technologies.
-7. Generate search_terms for required skills.
-8. Generate search_terms for certifications.
-9. Preserve recruiter intent.
-10. Return ONLY the job object.
-11. Never return an intent.
+2. Recruiter Instructions always take precedence over the Job Description.
+
+3. If the recruiter explicitly specifies experience, use ONLY the recruiter-specified experience and ignore the Job Description experience.
+
+4. If the recruiter does NOT mention experience, preserve the Job Description experience.
+
+5. Apply the same rule for title, location, education, skills, certifications and all other hiring requirements.
+6. Never invent information.
+. Extract only explicitly mentioned requirements.
+7. Remove duplicates.
+8. Normalize technologies.
+9. Generate search_terms for required skills.
+10. Generate search_terms for certifications.
+11. Preserve recruiter intent.
+12. Return ONLY the job object.
+13. Never return an intent.
 
 Experience Rules
+If the recruiter says:
+
+- freshers are okay
+- freshers can apply
+- freshers allowed
+- experience doesn't matter
+- any experience
+- all experience levels
+
+then ignore the Job Description experience and return
+
+{
+    "min": null,
+    "max": null
+}
 
 - "4 years" → min=4 max=4
 - "4+ years" → min=4 max=null
+- "More than 4 years" → min=4 max=null
+- "Over 4 years" → min=4 max=null
+- "At least 4 years" → min=4 max=null
+- "Minimum 4 years" → min=4 max=null
+
 - "Maximum 5 years" → min=null max=5
+- "Less than 5 years" → min=null max=5
+- "Below 5 years" → min=null max=5
+- "Up to 5 years" → min=null max=5
+
 - "4-6 years" → min=4 max=6
+- "Between 4 and 6 years" → min=4 max=6
 
 Missing values
 

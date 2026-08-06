@@ -1,6 +1,6 @@
 from datetime import datetime
 from bson import ObjectId
-
+from app.config.logging import logger
 from app.repository.base_repository import BaseRepository
 
 
@@ -52,39 +52,26 @@ class ConversationMessageRepository(BaseRepository):
 
     def get_messages(
         self,
-        conversation_id: str,
+        search_id: str,
     ):
 
         messages = list(
 
             self.collection.find(
-
                 {
-
-                    "conversation_id": ObjectId(conversation_id),
-
+                    "search_id": ObjectId(search_id),
                 }
-
             ).sort(
-
                 "created_at",
-
                 1,
-
             )
-
         )
 
         for message in messages:
-
             message["_id"] = str(message["_id"])
-
-            message["conversation_id"] = str(
-                message["conversation_id"]
-            )
+            message["search_id"] = str(message["search_id"])
 
         return messages
-    
 
 
     def update_message(

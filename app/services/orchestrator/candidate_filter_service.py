@@ -1,7 +1,7 @@
 from typing import List, Dict
 import re
 from app.config.logging import logger
-
+from app.repository.applicant_repository import ApplicantRepository
 
 class CandidateFilterService:
     """
@@ -16,6 +16,9 @@ class CandidateFilterService:
 
     EXPERIENCE_TOLERANCE = 1
 
+    def __init__(self):
+        self.applicant_repository = ApplicantRepository()
+
     def filter(
         self,
         candidates: List[Dict],
@@ -23,6 +26,14 @@ class CandidateFilterService:
     ) -> List[Dict]:
 
         logger.info(f"Initial candidates: {len(candidates)}")
+        logger.info(job["experience"])
+        candidates = self.filter_by_applicant_status(
+            candidates
+        )
+
+        logger.info(
+            f"After applicant status: {len(candidates)}"
+        )
 
         candidates = self.filter_by_experience(candidates, job)
         logger.info(f"After experience: {len(candidates)}")
@@ -44,6 +55,50 @@ class CandidateFilterService:
 
         return candidates
 
+    def filter_by_applicant_status(
+            self,
+            candidates,
+        ):
+    
+            if not candidates:
+                return candidates
+    
+            applicant_ids = list(
+                {
+                    candidate["applicant_id"]
+                    for candidate in candidates
+                    if candidate.get("applicant_id")
+                }
+            )
+    
+            status_map = (
+                self.applicant_repository.get_applicant_status_map(
+                    applicant_ids
+                )
+            )
+    
+            excluded_statuses = {
+                "ONBOARDING",
+                "OFFER_RELEASED",
+                "NEGOTIATION"
+                "JOINED",
+            }
+    
+            results = []
+    
+            for candidate in candidates:
+    
+                status = status_map.get(
+                    candidate["applicant_id"],
+                    "DRAFT",
+                )
+    
+                if status in excluded_statuses:
+                    continue
+    
+                results.append(candidate)
+    
+            return results
 
     def filter_by_experience(
         self,
@@ -51,6 +106,7 @@ class CandidateFilterService:
         job,
     ):
         experience = job.get("experience", {})
+        
 
         if not isinstance(experience, dict):
             return candidates
@@ -64,16 +120,21 @@ class CandidateFilterService:
         results = []
         for candidate in candidates:
 
+
             years = float(
                 candidate.get(
                     "experience_years",
                     0,
                 )
             )
+            logger.info(
+                f"{candidate['candidate_name']} -> {years}"
+            )
 
             # Exact experience (e.g. 4 years)
             if minimum is not None and maximum is not None:
-                if years == minimum:
+
+                if minimum <= years <= maximum:
                     results.append(candidate)
 
             # Minimum only (e.g. minimum 4 years / 4+ years)
@@ -111,8 +172,21 @@ class CandidateFilterService:
                 candidate.get("job_position", "")
             ).lower()
 
-            if title in designation or title in position:
+            if (
+                title in designation
+                or designation in title
+                or title in position
+                or position in title
+            ):
                 results.append(candidate)
+
+        # Do NOT eliminate everyone because of title mismatch.
+        # If nothing matched, continue with semantic search results.
+        if not results:
+            logger.info(
+                "No candidates matched job title. Skipping title filter."
+            )
+            return candidates
 
         return results
     
@@ -170,11 +244,36 @@ class CandidateFilterService:
                     if term
                 }
 
-                if candidate_skills.intersection(search_terms):
+                matched = False
+
+                for term in search_terms:
+
+                    for skill in candidate_skills:
+
+                        if term in skill or skill in term:
+
+                            logger.info(
+                                f"{candidate['candidate_name']} -> Matched '{term}' with '{skill}'"
+                            )
+
+                            matched = True
+                            break
+
+                    if matched:
+                        break
+
+                if matched:
                     matched_required += 1
 
-            if matched_required >=1:
+            if matched_required >= 1:
                 results.append(candidate)
+
+        # If nobody matched skills, don't kill semantic results.
+        if not results:
+            logger.info(
+                "No candidates matched required skills. Skipping skill filter."
+            )
+            return candidates
 
         return results
 
@@ -200,10 +299,20 @@ class CandidateFilterService:
             ).lower()
         ]
 
+        if not results:
+            logger.info(
+                "No candidates matched location. Skipping location filter."
+            )
+            return candidates
+
         return results
 
 
-    def filter_by_education(self, candidates, job):
+    def filter_by_education(
+        self,
+        candidates,
+        job,
+    ):
 
         education = job.get("education", "")
 
@@ -214,14 +323,38 @@ class CandidateFilterService:
 
         results = []
 
-        for c in candidates:
+        for candidate in candidates:
+
+            education_items = candidate.get("education", [])
+
+            education_text = []
+
+            for item in education_items:
+
+                if isinstance(item, str):
+                    education_text.append(item)
+
+                elif isinstance(item, dict):
+                    education_text.extend(
+                        [
+                            str(value)
+                            for value in item.values()
+                            if value
+                        ]
+                    )
 
             edu = " ".join(
-                c.get("education", [])
+                education_text
             ).lower()
 
             if education in edu:
-                results.append(c)
+                results.append(candidate)
+
+        if not results:
+            logger.info(
+                "No candidates matched education. Skipping education filter."
+            )
+            return candidates
 
         return results
 

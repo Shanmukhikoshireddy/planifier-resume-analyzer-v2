@@ -9,6 +9,7 @@ class CandidateActionService:
         self.search_repository = SearchRepository()
         self.job_vs_candidate_repository = JobVsCandidateRepository()
         self.applicant_repository = ApplicantRepository()
+        
 
     ##########################################################
     # Common
@@ -98,6 +99,7 @@ class CandidateActionService:
             applicant_status="SHORTLISTED",
             message="{candidate_name} shortlisted successfully.",
         )
+
     
     def reject_by_profile_id(
         self,

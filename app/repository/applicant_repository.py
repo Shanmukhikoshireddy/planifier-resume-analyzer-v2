@@ -87,3 +87,36 @@ class ApplicantRepository:
                 }
             }
         )
+    def get_applicant_status_map(
+        self,
+        applicant_ids: list,
+    ):
+
+        object_ids = [
+            ObjectId(applicant_id)
+            for applicant_id in applicant_ids
+        ]
+
+        applicants = self.collection.find(
+            {
+                "_id": {
+                    "$in": object_ids
+                }
+            },
+            {
+                "status": 1,
+            },
+        )
+
+        status_map = {}
+
+        for applicant in applicants:
+
+            status_map[
+                str(applicant["_id"])
+            ] = applicant.get(
+                "status",
+                "DRAFT",
+            )
+
+        return status_map

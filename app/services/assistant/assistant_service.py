@@ -41,6 +41,11 @@ class AssistantService:
         page,
         page_size,
     ):
+        logger.info("=" * 80)
+        logger.info(f"Incoming request.search_id: {repr(request.search_id)}")
+        logger.info(f"Incoming request.job_position_id: {repr(request.job_position_id)}")
+        logger.info(f"Prompt: {request.prompt}")
+        logger.info("=" * 80)
 
         # Load / Create Conversation
 
@@ -50,12 +55,20 @@ class AssistantService:
                 request.search_id
             )
 
-            if conversation is None:
-                conversation = self.conversation_service.create()
+            logger.info(
+                f"Loaded conversation : {conversation['search_id']}"
+            )
 
         else:
 
             conversation = self.conversation_service.create()
+
+            logger.info(
+                f"Created conversation : {conversation['search_id']}"
+            )
+        logger.info("=" * 80)
+        logger.info(f"Conversation search_id: {conversation['search_id']}")
+        logger.info("=" * 80)
 
         # Detect Intent
 
@@ -69,9 +82,7 @@ class AssistantService:
 
         if intent == "SEARCH":
 
-            current_search = conversation.get("current_search")
-
-            if current_search:
+            if request.search_id:
 
                 prompt = request.prompt.lower().strip()
 
@@ -83,12 +94,7 @@ class AssistantService:
                     "fresh search",
                 ]
 
-                is_explicit_new_search = any(
-                    keyword in prompt
-                    for keyword in new_search_keywords
-                )
-
-                if not is_explicit_new_search:
+                if not any(k in prompt for k in new_search_keywords):
                     intent = "SEARCH_MODIFICATION"
 
         logger.info(f"Final Intent : {intent}")
@@ -108,12 +114,37 @@ class AssistantService:
                 search = self.search_repository.get_search(
                     request.search_id
                 )
+                job_position = None
+
+                job_position_id = search.get("job_position_id")
+
+                if job_position_id:
+                    job_position = self.job_position_repository.get_job_position(
+                        job_position_id
+                    )
 
                 if search is None:
                     raise Exception("Search not found.")
 
+                merged_prompt = f"""
+                    Job Details
+                
+                    Experience:
+                    Minimum: {job_position.get("minExp", "")}
+                    Maximum: {job_position.get("maxExp", "")}
+                
+                    Required Skills:
+                    {", ".join(job_position.get("requiredSkills", []))}
+                
+                    Job Description:
+                    {job_position.get("jobDescription", "")}
+                
+                    Recruiter Instructions:
+                    {request.prompt}
+                    """
+                
                 search_result = self.prompt_parser.parse_search(
-                    request.prompt
+                                    merged_prompt
                 )
 
                 parsed = {
@@ -153,19 +184,25 @@ class AssistantService:
                     if job_position is None:
                         raise Exception("Job Position not found.")
 
-                    merged_prompt = f"""
-    Job Description:
+                    current_search = conversation.get("current_search", {})
 
-    {job_position.get("jobDescription", "")}
+                    context = self.conversation_service.build_context(
+                        conversation
+                    )
 
-    Recruiter Instructions:
+                    search_result = self.prompt_parser.parse_search(
+                        f"""
+                    Current Search
 
-    {request.prompt}
-    """
+                    {context}
 
-                search_result = self.prompt_parser.parse_search(
-                    merged_prompt
-                )
+                    User Request
+
+                    {request.prompt}
+
+                    Return the updated complete search.
+                    """
+                    )
 
                 parsed = {
                     "intent": intent,
@@ -226,14 +263,33 @@ class AssistantService:
         is_new_search,
     ):
 
+        job_position_id = None
+
+        if job_position:
+
+            job_position_id = str(job_position["_id"])
+
+        elif request.job_position_id:
+
+            job_position_id = request.job_position_id
+
+        elif request.search_id:
+
+            search = self.search_repository.get_search(
+                request.search_id
+            )
+
+            if search:
+
+                job_position_id = search.get(
+                    "job_position_id"
+                )
+
         return {
 
             "search_id": conversation["search_id"],
 
-            "job_position_id":
-                str(job_position["_id"])
-                if job_position
-                else None,
+            "job_position_id": job_position_id,
 
             "job_description":
                 job_position["jobDescription"]
@@ -333,17 +389,17 @@ class AssistantService:
         page_size,
     ):
 
-        merged_search = self.conversation_service.merge_search(
+        # NEW SEARCH -> replace current search
+        conversation["current_search"] = parsed["parsed_search"]
 
+        self.conversation_service.save(
+            conversation["search_id"],
             conversation,
-
-            parsed["parsed_search"],
-
         )
 
         return self.execute_search(
             conversation=conversation,
-            merged_search=merged_search,
+            merged_search=parsed["parsed_search"],
             job_position=job_position,
             request=request,
             page=page,
@@ -373,16 +429,69 @@ class AssistantService:
             parsed["parsed_search"],
         )
 
-        return self.execute_search(
+        search_context = self.build_search_context(
             conversation=conversation,
-            merged_search=merged_search,
+            parsed_search=merged_search,
             job_position=job_position,
             request=request,
-            page=page,
-            page_size=page_size,
             is_new_search=False,
-            message_type="SEARCH_MODIFICATION",
         )
+
+        response = self.search_service.refine_previous_results(
+
+            search_context=search_context,
+
+            page=page,
+
+            page_size=page_size,
+
+            conversation_message_id=conversation[
+                "conversation_message_id"
+            ],
+
+        )
+
+        self.conversation_message_repository.update_message(
+
+            message_id=conversation["conversation_message_id"],
+
+            assistant_message={
+
+                "type": "SEARCH_MODIFICATION",
+
+                "total_candidates": response["total_candidates"],
+
+            },
+
+        )
+
+        self.conversation_service.update_latest_search(
+
+            conversation,
+
+            conversation["conversation_message_id"],
+
+        )
+
+        self.conversation_service.add_assistant_message(
+
+            conversation=conversation,
+
+            message={
+
+                "type": "SEARCH_MODIFICATION",
+
+                "results": response["total_candidates"],
+
+            },
+
+            conversation_message_id=conversation[
+                "conversation_message_id"
+            ],
+
+        )
+
+        return response
     # GENERAL QUESTIONS
 
     def answer_general(

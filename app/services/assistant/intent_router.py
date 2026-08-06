@@ -12,35 +12,7 @@ class IntentRouter:
         request,
         page,
         page_size,
-    ):
-
-        # Override SEARCH -> SEARCH_MODIFICATION when a search already exists
-
-        # Detect search modification only when there is an active search
-        if intent == "SEARCH":
-
-            current_search = conversation.get("current_search")
-
-            if current_search:
-
-                prompt = request.prompt.lower().strip()
-
-                new_search_keywords = [
-                    "new search",
-                    "start new search",
-                    "reset search",
-                    "clear search",
-                    "fresh search",
-                ]
-
-                is_explicit_new_search = any(
-                    keyword in prompt
-                    for keyword in new_search_keywords
-                )
-
-                # Existing search + no explicit reset -> treat as modification
-                if not is_explicit_new_search:
-                    intent = "SEARCH_MODIFICATION"
+        ):
 
         logger.info("=" * 80)
         logger.info(f"Routing Intent : {intent}")
@@ -65,8 +37,6 @@ class IntentRouter:
                     ),
                 )
 
-
-
         handlers = {
             "SEARCH": assistant.handle_search,
             "SEARCH_MODIFICATION": assistant.modify_search,
@@ -82,13 +52,13 @@ class IntentRouter:
             "UNDO_SHORTLIST": assistant.undo_shortlist,
             "UNDO_REJECT": assistant.undo_reject,
         }
+
         handler = handlers.get(
             intent,
             assistant.unknown_intent,
         )
 
-        if intent in ["SEARCH", "SEARCH_MODIFICATION"]:
-
+        if intent in ("SEARCH", "SEARCH_MODIFICATION"):
             return handler(
                 conversation=conversation,
                 parsed=parsed,
