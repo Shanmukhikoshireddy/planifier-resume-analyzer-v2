@@ -80,83 +80,109 @@ class AssistantService:
 
         logger.info(f"Detected Intent : {intent}")
 
-        if intent == "SEARCH":
+        if intent == "SEARCH" and request.search_id:
 
-            if request.search_id:
+            prompt = request.prompt.lower().strip()
 
-                prompt = request.prompt.lower().strip()
+            new_search_keywords = [
+                "new search",
+                "start new search",
+                "reset search",
+                "clear search",
+                "fresh search",
+            ]
 
-                new_search_keywords = [
-                    "new search",
-                    "start new search",
-                    "reset search",
-                    "clear search",
-                    "fresh search",
-                ]
+            has_previous_search = (
+                conversation.get("latest_search_id") is not None
+            )
 
-                if not any(k in prompt for k in new_search_keywords):
-                    intent = "SEARCH_MODIFICATION"
+            if (
+                has_previous_search
+                and not any(k in prompt for k in new_search_keywords)
+            ):
+                intent = "SEARCH_MODIFICATION"
 
         logger.info(f"Final Intent : {intent}")
 
         # Default values
-
+        # Default values
         job_position = None
 
         # SEARCH / SEARCH MODIFICATION
-
         if intent in ["SEARCH", "SEARCH_MODIFICATION"]:
 
+            # ---------------------------------------------------
             # SEARCH MODIFICATION
+            # ---------------------------------------------------
+            if (
+                intent == "SEARCH_MODIFICATION"
+                and request.search_id
+                and conversation.get("latest_search_id")
+            ):
 
-            if intent == "SEARCH_MODIFICATION" and request.search_id :
+                latest_search_id = conversation.get("latest_search_id")
 
-                search = self.search_repository.get_search(
-                    request.search_id
-                )
-                job_position = None
+                if not latest_search_id:
 
-                job_position_id = search.get("job_position_id")
+                    logger.info(
+                        "No previous search. Starting a new search."
+                    )
 
-                if job_position_id:
+                    intent = "SEARCH"
+
+                else:
+
+                    search = self.search_repository.get_search(
+                        latest_search_id
+                    )
+
+                    if search is None:
+                        raise Exception(
+                            "Previous search not found."
+                        )
+
+                    job_position_id = search.get("job_position_id")
+
+                    if not job_position_id:
+                        raise Exception(
+                            "Previous search has no job position."
+                        )
+
                     job_position = self.job_position_repository.get_job_position(
                         job_position_id
                     )
 
-                if search is None:
-                    raise Exception("Search not found.")
+                    if job_position is None:
+                        raise Exception(
+                            "Job Position not found."
+                        )
 
                 merged_prompt = f"""
-                    Job Details
-                
-                    Experience:
-                    Minimum: {job_position.get("minExp", "")}
-                    Maximum: {job_position.get("maxExp", "")}
-                
-                    Required Skills:
-                    {", ".join(job_position.get("requiredSkills", []))}
-                
-                    Job Description:
-                    {job_position.get("jobDescription", "")}
-                
-                    Recruiter Instructions:
-                    {request.prompt}
-                    """
-                
+                Job Details
+
+                Experience:
+                Minimum: {job_position.get("minExp", "")}
+                Maximum: {job_position.get("maxExp", "")}
+
+                Required Skills:
+                {", ".join(job_position.get("requiredSkills", []))}
+
+                Job Description:
+                {job_position.get("jobDescription", "")}
+
+                Recruiter Instructions:
+                {request.prompt}
+                """
+
                 search_result = self.prompt_parser.parse_search(
-                                    merged_prompt
+                    merged_prompt
                 )
 
-                parsed = {
-                    "intent": intent,
-                    "parsed_search": search_result["job"],
-                }
-
+            # ---------------------------------------------------
             # NEW SEARCH
-
+            # ---------------------------------------------------
             else:
 
-                # Global Search
                 if request.global_search_allowed:
 
                     merged_prompt = request.prompt
@@ -165,10 +191,11 @@ class AssistantService:
                         job_position = self.job_position_repository.get_job_position(
                             request.job_position_id
                         )
-                    else:
-                        job_position = None
 
-                # Job-based Search
+                    search_result = self.prompt_parser.parse_search(
+                        merged_prompt
+                    )
+
                 else:
 
                     if not request.job_position_id:
@@ -179,12 +206,11 @@ class AssistantService:
                     job_position = self.job_position_repository.get_job_position(
                         request.job_position_id
                     )
+
                     logger.info(f"Fetched Job Position: {job_position}")
 
                     if job_position is None:
                         raise Exception("Job Position not found.")
-
-                    current_search = conversation.get("current_search", {})
 
                     context = self.conversation_service.build_context(
                         conversation
@@ -192,22 +218,24 @@ class AssistantService:
 
                     search_result = self.prompt_parser.parse_search(
                         f"""
-                    Current Search
+        Current Search
 
-                    {context}
+        {context}
 
-                    User Request
+        User Request
 
-                    {request.prompt}
+        {request.prompt}
 
-                    Return the updated complete search.
-                    """
+        Return the updated complete search.
+        """
                     )
 
-                parsed = {
-                    "intent": intent,
-                    "parsed_search": search_result["job"],
-                }
+            # -------- THIS MUST BE OUTSIDE BOTH BRANCHES --------
+
+            parsed = {
+                "intent": intent,
+                "parsed_search": search_result["job"],
+            }
 
         else:
 
@@ -229,6 +257,10 @@ class AssistantService:
 
         self.conversation_service.add_user_message(
             conversation,
+            request.prompt,
+        )
+        self.search_repository.touch_search(
+            conversation["search_id"],
             request.prompt,
         )
 
@@ -543,6 +575,7 @@ class AssistantService:
         )
 
         return {
+            "search_id":conversation["search_id"],
 
             "type": "GENERAL",
 

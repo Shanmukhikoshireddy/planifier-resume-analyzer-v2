@@ -127,9 +127,6 @@ class CandidateFilterService:
                     0,
                 )
             )
-            logger.info(
-                f"{candidate['candidate_name']} -> {years}"
-            )
 
             # Exact experience (e.g. 4 years)
             if minimum is not None and maximum is not None:
@@ -252,9 +249,6 @@ class CandidateFilterService:
 
                         if term in skill or skill in term:
 
-                            logger.info(
-                                f"{candidate['candidate_name']} -> Matched '{term}' with '{skill}'"
-                            )
 
                             matched = True
                             break

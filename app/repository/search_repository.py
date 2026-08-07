@@ -175,11 +175,7 @@ class SearchRepository(BaseRepository):
 
         jobs = list(
             self.collection.find(
-                {
-                    "status": {
-                        "$ne": "NEW"
-                    }
-                },
+                {},
                 {
                     "parsed_search.title": 1,
                     "original_prompt": 1,
@@ -197,41 +193,68 @@ class SearchRepository(BaseRepository):
 
         for job in jobs:
 
-            history.append({
+            prompt = (
+                job.get("original_prompt")
+                or job.get("parsed_search", {}).get("title")
+                or "New Conversation"
+            )
 
-                "search_id": str(job["_id"]),
+            status = job.get("status", "NEW")
 
-                "title": job.get(
-                    "parsed_search",
-                    {},
-                ).get(
-                    "title",
-                    ""
-                ),
+            if status == "COMPLETED":
+                subtitle = f"{job.get('search_result_count',0)} Candidates"
+            elif status == "PROCESSING":
+                subtitle = "Searching..."
+            elif status == "NEW":
+                subtitle = "New Conversation"
+            else:
+                subtitle = status.title()
 
-                "last_prompt": job.get(
-                    "original_prompt",
-                    "",
-                ),
-
-                "candidate_count": job.get(
-                    "search_result_count",
-                    0,
-                ),
-
-                "status": job.get(
-                    "status",
-                ),
-
-                "updated_at": job.get(
-                    "updated_at",
-                ),
-
-            })
+            history.append(
+                {
+                    "search_id": str(job["_id"]),
+                    "title": prompt[:60],
+                    "subtitle": subtitle,
+                    "candidate_count": job.get(
+                        "search_result_count",
+                        0,
+                    ),
+                    "status": status,
+                    "updated_at": job.get("updated_at"),
+                }
+            )
 
         return history
 
+    def touch_search(
+        self,
+        search_id,
+        prompt,
+    ):
 
+        self.collection.update_one(
+            {
+                "_id": ObjectId(search_id),
+            },
+            {
+                "$set": {
+                    "updated_at": datetime.utcnow(),
+                },
+                "$setOnInsert": {},
+            },
+        )
+
+        self.collection.update_one(
+            {
+                "_id": ObjectId(search_id),
+                "original_prompt": "",
+            },
+            {
+                "$set": {
+                    "original_prompt": prompt,
+                }
+            },
+        )
     def get_chat(
         self,
         search_id: str,
