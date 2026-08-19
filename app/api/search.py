@@ -18,12 +18,17 @@ search_service = SearchService()
 search_repository = SearchRepository()
 
 
-# Search History
+# All chats
 @router.get(
     "/feed",
 )
 def search_history():
     return search_repository.get_all_search()
+
+#Delete chat
+@router.delete("/{search_id}")
+def delete_search(search_id: str):
+    return search_repository.delete_search(search_id)
 
 
 # Search Candidates

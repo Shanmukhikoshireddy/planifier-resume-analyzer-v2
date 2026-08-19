@@ -175,7 +175,11 @@ class SearchRepository(BaseRepository):
 
         jobs = list(
             self.collection.find(
-                {},
+                {
+            "is_deleted": {
+                "$ne": True
+            }
+                },
                 {
                     "parsed_search.title": 1,
                     "original_prompt": 1,
@@ -327,14 +331,37 @@ class SearchRepository(BaseRepository):
             "conversation": conversation,
 
         }
-    # Delete Job
-    def delete_search(
-        self,
-        search_id: str,
-    ):
-        self.collection.delete_one(
-            {"_id": ObjectId(search_id)}
+
+    def delete_search(self, search_id: str):
+
+        result = self.collection.update_one(
+            {
+                "_id": ObjectId(search_id),
+                "is_deleted": {"$ne": True},
+            },
+            {
+                "$set": {
+                    "is_deleted": True,
+                    "updated_at": datetime.utcnow(),
+                }
+            },
         )
+
+        if result.matched_count == 0:
+            raise ValueError("Search not found")
+
+        return {
+            "search_id": search_id,
+            "deleted": True,
+        }
+    # Delete Job
+    # def delete_search(
+    #     self,
+    #     search_id: str,
+    # ):
+    #     self.collection.delete_one(
+    #         {"_id": ObjectId(search_id)}
+    #     )
 
     # Count Jobs
     def count_search(self):
