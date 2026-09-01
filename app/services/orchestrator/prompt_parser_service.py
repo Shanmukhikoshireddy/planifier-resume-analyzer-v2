@@ -1,8 +1,10 @@
 from app.config.logging import logger
-from app.prompts.job_prompt import build_job_prompt
 from app.services.shared.openai_service import OpenAIService
 from app.prompts.intent_prompt import build_intent_prompt
-
+from app.prompts.job_prompt import (
+    build_job_prompt,
+    build_modification_prompt,
+)
 class PromptParserService:
 
     def __init__(self):
@@ -18,6 +20,10 @@ class PromptParserService:
 
         response = self.openai_service.generate_json(
             llm_prompt
+        )
+        logger.info(
+            "Intent Response: %s",
+            response,
         )
 
         if not isinstance(response, dict):
@@ -55,22 +61,47 @@ class PromptParserService:
         logger.info("=" * 80)
         logger.info("SEARCH PARSER")
         logger.info("=" * 80)
-
         llm_prompt = build_job_prompt(prompt)
 
         response = self.openai_service.generate_json(
             llm_prompt
         )
 
+        logger.info(
+            "RAW SEARCH RESPONSE TYPE: %s",
+            type(response).__name__,
+        )
+
+        logger.info(
+            "RAW SEARCH RESPONSE: %r",
+            response,
+        )
+
+        if response is None:
+            raise ValueError(
+                "OpenAI returned an empty response."
+            )
+
         if not isinstance(response, dict):
-            raise ValueError("Invalid JSON returned.")
+            raise ValueError(
+                "Invalid JSON returned."
+            )
 
         job = response.get("job")
 
         if not isinstance(job, dict):
-            raise ValueError("Job object missing.")
+            logger.error(
+                f"Missing 'job' in search response: {response}"
+            )
+            raise ValueError(
+                "Job object missing."
+            )
 
         self._normalize(job)
+
+        logger.info(
+            f"Parsed Search Job:{job}"
+        )
 
         return {
             "job": job
@@ -97,6 +128,10 @@ class PromptParserService:
 
         response = self.openai_service.generate_json(
             llm_prompt
+        )
+        logger.info(
+            "RAW MODIFICATION RESPONSE: %s",
+            response,
         )
 
         logger.info("OpenAI Response:")
@@ -125,14 +160,22 @@ class PromptParserService:
             "RESET_SEARCH",
         }
 
-        logger.info(f"Intent after normalization: '{intent}'")
-        logger.info(f"Valid? {intent in valid_intents}")
+        logger.info(
+            "Intent after normalization: '%s'",
+            intent,
+        )
+
+        logger.info(
+            "Valid? %s",
+            intent in valid_intents,
+        )
 
         if intent not in valid_intents:
-            raise ValueError(f"OpenAI returned invalid intent: '{intent}'")
+            raise ValueError(
+                f"OpenAI returned invalid intent: '{intent}'"
+            )
 
         response["intent"] = intent
-        return response
 
         ####################################################
         # GENERAL
@@ -227,6 +270,8 @@ class PromptParserService:
             "experience": {
                 "min": None,
                 "max": None,
+                "min_operator": None,
+                "max_operator": None,
             },
             "education": "",
             "location": "",
@@ -266,6 +311,8 @@ class PromptParserService:
 
         job["experience"].setdefault("min", None)
         job["experience"].setdefault("max", None)
+        job["experience"].setdefault("min_operator", None)
+        job["experience"].setdefault("max_operator", None)
 
         # ----------------------------
         # Initialize list fields
@@ -396,3 +443,36 @@ class PromptParserService:
         job["required_skills"] = normalized_required_skills
 
         return job
+
+    def parse_modification(self, prompt: str):
+
+        logger.info("=" * 80)
+        logger.info("MODIFICATION PARSER")
+        logger.info("=" * 80)
+
+        llm_prompt = build_modification_prompt(prompt)
+
+        response = self.openai_service.generate_json(
+            llm_prompt
+        )
+        logger.info(
+            "RAW MODIFICATION RESPONSE: %s",
+            response,
+        )
+
+        if not isinstance(response, dict):
+            raise ValueError("Invalid JSON returned.")
+
+        job = response.get("job")
+
+        if not isinstance(job, dict):
+            raise ValueError("Modification job object missing.")
+
+        self._normalize(job)
+
+        logger.info("Parsed Modification:")
+        logger.info(job)
+
+        return {
+            "job": job
+        }

@@ -68,7 +68,24 @@ class SearchService:
 
         logger.info("=" * 80)
 
-        search_id = search_context["search_id"]
+        search_id = search_context.get("search_id") or ""
+
+        # Create a Mongo search document for a brand-new search
+        # before any repository update is attempted.
+        if not search_id:
+            logger.info(
+                "No search_id provided. Creating new search."
+            )
+
+            search_id = (
+                self.search_repository.create_empty_search()
+            )
+
+            logger.info(
+                f"Created new search_id: {search_id}"
+            )
+
+            search_context["search_id"] = search_id
 
         parsed_search = search_context["parsed_search"]
 
@@ -79,6 +96,12 @@ class SearchService:
         global_search_allowed = search_context["global_search_allowed"]
 
         original_prompt = search_context["original_prompt"]
+
+        # is_new_search is intentionally honored by execute() as a fresh
+        # vector-search request. Previous candidates are only reused by
+        # refine_previous_results(), which is called for SEARCH_MODIFICATION.
+        is_new_search = search_context.get("is_new_search", True)
+        logger.info(f"Independent search execution: {is_new_search}")
 
         logger.info(f"Job Id : {job_position_id}")
 
@@ -359,27 +382,94 @@ class SearchService:
 
     def refine_previous_results(
         self,
-        search_context: dict,
-        page: int,
-        page_size: int,
-        conversation_message_id: str,
+        search_context,
+        page,
+        page_size,
+        conversation_message_id,
+        previous_result_message_id,
     ):
 
         logger.info("=" * 80)
         logger.info("REFINING PREVIOUS SEARCH")
         logger.info("=" * 80)
 
-        search_id = search_context["search_id"]
+        search_id = search_context.get(
+            "search_id"
+        ) or ""
 
-        parsed_search = search_context["parsed_search"]
+        # Refinement requires an existing search. Never fall back
+        # to a global search when the search_id is missing.
+        if not search_id:
+            logger.warning(
+                "SEARCH_MODIFICATION received without search_id."
+            )
+
+            return {
+                "search_id": search_id,
+                "page": page,
+                "page_size": page_size,
+                "total_candidates": 0,
+                "total_pages": 0,
+                "results": [],
+            }
+
+        parsed_search = (
+            search_context.get(
+                "parsed_search",
+                {},
+            )
+            or {}
+        )
+
+        previous_search = (
+            search_context.get(
+                "previous_search",
+                {},
+            )
+            or {}
+        )
+
+        modification_search = (
+            search_context.get(
+                "modification_search",
+                {},
+            )
+            or {}
+        )
+
+        logger.info(
+            f"Previous search: {previous_search}"
+        )
+
+        logger.info(
+            f"Modification search: {modification_search}"
+        )
+
+        logger.info(
+            f"Merged search: {parsed_search}"
+        )
+
+        # ========================================================
+        # BUILD EMBEDDING TEXT FROM MERGED SEARCH
+        # ========================================================
 
         job_text = self.build_search_embedding_text(
             parsed_search
         )
 
+        logger.info("=" * 80)
+        logger.info("REFINEMENT EMBEDDING TEXT")
+        logger.info(job_text)
+        logger.info("=" * 80)
+
+        # ========================================================
+        # LOAD PREVIOUS CANDIDATES
+        # ========================================================
+
         previous_candidates = (
-            self.search_repository.get_latest_search_results(
-                search_id
+            self.search_repository
+            .get_results_by_conversation_message(
+                previous_result_message_id
             )
         )
 
@@ -387,95 +477,172 @@ class SearchService:
             f"Loaded {len(previous_candidates)} previous candidates."
         )
 
+        # ========================================================
+        # IMPORTANT
+        #
+        # A SEARCH_MODIFICATION must NOT fall back to a global
+        # vector search.
+        #
+        # Example:
+        #
+        # Previous:
+        # Python developers
+        #
+        # Modification:
+        # 3+ years
+        #
+        # We must filter previous Python candidates.
+        #
+        # We must NOT search globally for "3+ years".
+        # ========================================================
+
         if not previous_candidates:
 
             logger.warning(
-                "No previous candidates found. Falling back to vector search."
+                "No previous candidates found for refinement."
             )
 
-            return self.search(
-                search_context=search_context,
-                page=page,
-                page_size=page_size,
-                conversation_message_id=conversation_message_id,
+            logger.warning(
+                "NOT falling back to global vector search."
             )
 
+            self.search_repository.update_result_count(
+                search_id,
+                0,
+            )
+
+            self.search_repository.update_status(
+                search_id,
+                "COMPLETED",
+            )
+
+            return {
+                "search_id": search_id,
+                "page": page,
+                "page_size": page_size,
+                "total_candidates": 0,
+                "total_pages": 0,
+                "results": [],
+            }
+
+        # ========================================================
+        # COPY CANDIDATES
         #
-        # Remove Mongo document id
-        #
+        # Do not modify Mongo result objects directly.
+        # ========================================================
 
         cleaned_candidates = []
 
         for candidate in previous_candidates:
 
-            candidate.pop("_id", None)
+            candidate = dict(candidate)
 
-            candidate.pop("search_id", None)
+            candidate.pop(
+                "_id",
+                None,
+            )
 
-            candidate.pop("conversation_message_id", None)
+            candidate.pop(
+                "search_id",
+                None,
+            )
 
-            candidate.pop("created_at", None)
+            candidate.pop(
+                "conversation_message_id",
+                None,
+            )
 
-            candidate.pop("status", None)
+            candidate.pop(
+                "created_at",
+                None,
+            )
 
-            candidate.pop("rank", None)
+            candidate.pop(
+                "status",
+                None,
+            )
 
-            cleaned_candidates.append(candidate)
+            candidate.pop(
+                "rank",
+                None,
+            )
 
+            cleaned_candidates.append(
+                candidate
+            )
+
+        logger.info(
+            f"Candidates before refinement filters: {len(cleaned_candidates)}"
+        )
+
+        # ========================================================
+        # APPLY MERGED BUSINESS FILTERS
         #
-        # Apply updated filters
+        # IMPORTANT:
+        # parsed_search must be the MERGED search.
         #
+        # Example:
+        #
+        # Python + 3 years + Telangana
+        # ========================================================
 
-        candidates = self.candidate_filter_service.filter(
-
-            cleaned_candidates,
-
-            parsed_search,
-
+        candidates = (
+            self.candidate_filter_service.filter(
+                cleaned_candidates,
+                parsed_search,
+            )
+        )
+        logger.info(
+            "FINAL EXPERIENCE BEFORE FILTER: %s",
+            parsed_search.get("experience"),
         )
 
         logger.info(
-            f"After refinement filters : {len(candidates)}"
+            f"After refinement filters: {len(candidates)}"
         )
+
+        # ========================================================
+        # NO MATCH
+        # ========================================================
 
         if not candidates:
 
+            logger.info(
+                "No previous candidates satisfied "
+                "the modified search."
+            )
+
+            self.search_repository.update_result_count(
+                search_id,
+                0,
+            )
+
+            self.search_repository.update_status(
+                search_id,
+                "COMPLETED",
+            )
+
             return {
-
                 "search_id": search_id,
-
                 "page": page,
-
                 "page_size": page_size,
-
                 "total_candidates": 0,
-
                 "total_pages": 0,
-
                 "results": [],
-
             }
 
-        #
-        # Continue existing pipeline
-        #
+        # ========================================================
+        # RERANK ONLY THE PREVIOUS CANDIDATES
+        # ========================================================
 
         return self.rerank_candidates(
-
             search_id=search_id,
-
             parsed_search=parsed_search,
-
             job_text=job_text,
-
             candidates=candidates,
-
             page=page,
-
             page_size=page_size,
-
             conversation_message_id=conversation_message_id,
-
         )
 ######
     # Vector Search######

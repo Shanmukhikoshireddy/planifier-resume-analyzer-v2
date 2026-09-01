@@ -28,7 +28,6 @@ class ContextMerger:
 
         for field in [
             "title",
-            "education",
             "location",
         ]:
 
@@ -42,18 +41,145 @@ class ContextMerger:
             ]:
                 merged[field] = value
 
+        current_education = (
+           current.get("education")
+        )
+
+        if isinstance(current_education, dict):
+
+            merged["education"] = deepcopy(
+                current_education
+            )
+
+        elif current_education not in (
+            None,
+            "",
+            [],
+            {},
+        ):
+
+            merged["education"] = {
+                "value": str(current_education),
+                "search_terms": [
+                    str(current_education)
+                ],
+            }
+
         ####################################################
         # Experience
         ####################################################
 
         current_exp = current.get("experience") or {}
-        merged_exp = deepcopy(merged.get("experience") or {})
 
-        if current_exp.get("min") is not None:
-            merged_exp["min"] = current_exp["min"]
+        previous_exp = merged.get("experience") or {}
 
-        if current_exp.get("max") is not None:
-            merged_exp["max"] = current_exp["max"]
+        merged_exp = deepcopy(previous_exp)
+
+        current_min = current_exp.get("min")
+        current_max = current_exp.get("max")
+
+        current_min_operator = current_exp.get(
+            "min_operator"
+        )
+
+        current_max_operator = current_exp.get(
+            "max_operator"
+        )
+
+        # --------------------------------------------------
+        # Strict lower bound
+        # --------------------------------------------------
+
+        if current_min_operator == ">":
+
+            merged_exp = {
+                "min": current_min,
+                "max": None,
+                "min_operator": ">",
+                "max_operator": None,
+            }
+
+        # --------------------------------------------------
+        # Strict upper bound
+        # --------------------------------------------------
+
+        elif current_max_operator == "<":
+
+            merged_exp = {
+                "min": None,
+                "max": current_max,
+                "min_operator": None,
+                "max_operator": "<",
+            }
+
+        # --------------------------------------------------
+        # Explicit minimum / inclusive lower bound
+        # --------------------------------------------------
+
+        elif (
+            current_min is not None
+            and current_min_operator == ">="
+            and current_max is None
+        ):
+
+            merged_exp = {
+                "min": current_min,
+                "max": None,
+                "min_operator": ">=",
+                "max_operator": None,
+            }
+
+        # --------------------------------------------------
+        # Explicit maximum / inclusive upper bound
+        # --------------------------------------------------
+
+        elif (
+            current_max is not None
+            and current_max_operator == "<="
+            and current_min is None
+        ):
+
+            merged_exp = {
+                "min": None,
+                "max": current_max,
+                "min_operator": None,
+                "max_operator": "<=",
+            }
+
+        # --------------------------------------------------
+        # Exact experience
+        # --------------------------------------------------
+
+        elif (
+            current_min is not None
+            and current_max is not None
+            and current_min_operator == ">="
+            and current_max_operator == "<="
+            and current_min == current_max
+        ):
+
+            merged_exp = {
+                "min": current_min,
+                "max": current_max,
+                "min_operator": ">=",
+                "max_operator": "<=",
+            }
+
+        # --------------------------------------------------
+        # Explicit range
+        # --------------------------------------------------
+
+        elif (
+            current_min is not None
+            and current_max is not None
+        ):
+
+            merged_exp = {
+                "min": current_min,
+                "max": current_max,
+                "min_operator": current_min_operator or ">=",
+                "max_operator": current_max_operator or "<=",
+            }
 
         merged["experience"] = merged_exp
         

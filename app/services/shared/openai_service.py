@@ -46,25 +46,100 @@ class OpenAIService:
         self,
         messages,
     ) -> dict:
-        response = self.generate(messages)
+
+        response = self.generate(
+            messages
+        )
+
+        logger.info(
+            f"OPENAI RAW RESPONSE TYPE: {type(response).__name__}"
+        )
+
+        logger.info(
+            f"OPENAI RAW RESPONSE: {response}"
+        )
+
+        if response is None:
+            raise ValueError(
+                "OpenAI returned an empty response."
+            )
+
+        if not isinstance(response, str):
+            raise ValueError(
+                "OpenAI response is not a string."
+            )
+
         response = response.strip()
+
+        if not response:
+            raise ValueError(
+                "OpenAI returned an empty response."
+            )
+
+        # Remove markdown fences if present
         if response.startswith("```"):
-            response = response.replace("```json", "")
-            response = response.replace("```", "")
+
+            response = response.replace(
+                "```json",
+                "",
+            )
+
+            response = response.replace(
+                "```",
+                "",
+            )
+
             response = response.strip()
+
+        # Extract JSON object
         start = response.find("{")
         end = response.rfind("}")
-        if start != -1 and end != -1:
-            response = response[start:end + 1]
-        try:
-            parsed = json.loads(response)
-            return parsed
-        except json.JSONDecodeError as e:
-            logger.error("OpenAI returned invalid JSON.")
-            logger.error(response)
-            logger.exception(e)
-            raise ValueError("Invalid JSON returned by OpenAI.")
 
+        if start == -1 or end == -1:
+
+            logger.error(
+                "No JSON object found in OpenAI response."
+            )
+
+            logger.error(
+                f"Response: {response}"
+            )
+
+            raise ValueError(
+                "Invalid JSON returned by OpenAI."
+            )
+
+        response = response[
+            start:end + 1
+        ]
+
+        try:
+
+            parsed = json.loads(
+                response
+            )
+
+            logger.info(
+                f"PARSED OPENAI JSON: {parsed}"
+            )
+
+            return parsed
+
+        except json.JSONDecodeError as e:
+
+            logger.error(
+                "OpenAI returned invalid JSON."
+            )
+
+            logger.error(
+                f"Response: {response}"
+            )
+
+            logger.exception(e)
+
+            raise ValueError(
+                "Invalid JSON returned by OpenAI."
+            )
     # Health Check
     def health_check(self) -> bool:
         try:

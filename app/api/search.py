@@ -56,12 +56,18 @@ def search_candidates(
 
         return response
 
+    except HTTPException:
+        raise
+
     except Exception as e:
 
         logger.info("=" * 80)
         logger.info(traceback.format_exc())
         logger.info("=" * 80)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        )
 
 # Get Search Results
 @router.get(
