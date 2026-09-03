@@ -83,7 +83,7 @@ class ApplicantRepository:
             {
                 "$set": {
                     "status": status,
-                    "updatedAt": datetime.utcnow(),
+                    "updatedAt": utc_now(),
                 }
             }
         )

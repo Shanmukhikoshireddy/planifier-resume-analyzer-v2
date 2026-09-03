@@ -1,4 +1,5 @@
 from app.config.logging import logger
+from app.config.settings import settings
 
 from app.repository.search_repository import SearchRepository
 from app.repository.profile_repository import ProfileRepository
@@ -163,6 +164,24 @@ class SearchService:
     
 ######
     # List -> Text######
+
+    def _limit_for_rerank(self, candidates: list) -> list:
+        candidates.sort(
+            key=lambda item: item.get("semantic_score", 0),
+            reverse=True,
+        )
+
+        rerank_limit = settings.RERANK_TOP_K
+
+        if len(candidates) > rerank_limit:
+            logger.info(
+                "Limiting rerank to top %s of %s candidates.",
+                rerank_limit,
+                len(candidates),
+            )
+            return candidates[:rerank_limit]
+
+        return candidates
 
     def list_to_text(
         self,
@@ -601,6 +620,8 @@ class SearchService:
             f"After refinement filters: {len(candidates)}"
         )
 
+        candidates = self._limit_for_rerank(candidates)
+
         # ========================================================
         # NO MATCH
         # ========================================================
@@ -773,6 +794,7 @@ class SearchService:
             f"After Filtering : {len(candidates)}"
         )
 
+        candidates = self._limit_for_rerank(candidates)
 
         # Nothing Left
 

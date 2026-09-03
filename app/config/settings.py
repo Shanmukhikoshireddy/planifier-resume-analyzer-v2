@@ -21,6 +21,8 @@ class Settings(BaseSettings):
         "https://app.planifier.app,"
         "https://planifier-app.netlify.app,"
         "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
+        "http://localhost:3001,"
         "http://localhost:5173"
     )
 
@@ -42,6 +44,10 @@ class Settings(BaseSettings):
     # Embedding
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
     RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    VECTOR_SEARCH_LIMIT: int = 80
+    VECTOR_SEARCH_CANDIDATES: int = 200
+    RERANK_TOP_K: int = 20
+    RERANK_MAX_CHARS: int = 800
     SEMANTIC_WEIGHT: float = 0.35
     SKILL_WEIGHT: float = 0.25
     EXPERIENCE_WEIGHT: float = 0.15

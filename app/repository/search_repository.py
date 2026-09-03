@@ -1,8 +1,7 @@
-from datetime import datetime
-
+from app.utils.datetime_utils import utc_now
 from bson import ObjectId
 from bson.errors import InvalidId
-
+from app.utils.datetime_utils import utc_to_ist
 from app.repository.base_repository import BaseRepository
 from app.config.logging import logger
 
@@ -63,9 +62,9 @@ class SearchRepository(BaseRepository):
 
             "received_within": received_within,
 
-            "created_at": datetime.utcnow(),
+            "created_at": utc_now(),
 
-            "updated_at": datetime.utcnow(),
+            "updated_at": utc_now(),
 
             "status": "PROCESSING",
 
@@ -210,7 +209,7 @@ class SearchRepository(BaseRepository):
 
         update_fields[
             "updated_at"
-        ] = datetime.utcnow()
+        ] = utc_now()
 
         self.collection.update_one(
             {
@@ -468,8 +467,8 @@ class SearchRepository(BaseRepository):
 
                     "status": status,
 
-                    "updated_at": job.get(
-                        "updated_at"
+                    "updated_at": utc_to_ist(
+                        job.get("updated_at")
                     ),
                 }
             )
@@ -492,7 +491,7 @@ class SearchRepository(BaseRepository):
             },
             {
                 "$set": {
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 },
                 "$setOnInsert": {},
             },
@@ -624,7 +623,7 @@ class SearchRepository(BaseRepository):
             {
                 "$set": {
                     "is_deleted": True,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
             },
         )
@@ -667,7 +666,7 @@ class SearchRepository(BaseRepository):
             {
                 "$set": {
                     "search_result_count": count,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
             }
         )
@@ -689,7 +688,7 @@ class SearchRepository(BaseRepository):
             {
                 "$set": {
                     "status": status,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
             }
         )
@@ -814,7 +813,7 @@ class SearchRepository(BaseRepository):
 
                     "conversation": conversation,
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             }
@@ -838,7 +837,7 @@ class SearchRepository(BaseRepository):
 
             "content": content,
 
-            "timestamp": datetime.utcnow(),
+            "timestamp": utc_now(),
 
         }
 
@@ -871,7 +870,7 @@ class SearchRepository(BaseRepository):
                 },
 
                 "$set": {
-                    "updated_at": datetime.utcnow()
+                    "updated_at": utc_now()
                 }
             }
         )
@@ -899,7 +898,7 @@ class SearchRepository(BaseRepository):
                         current_search
                     ),
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             }
@@ -948,7 +947,7 @@ class SearchRepository(BaseRepository):
                         conversation_message_id
                     ),
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             }
@@ -992,9 +991,9 @@ class SearchRepository(BaseRepository):
 
             "search_result_count": 0,
 
-            "created_at": datetime.utcnow(),
+            "created_at": utc_now(),
 
-            "updated_at": datetime.utcnow(),
+            "updated_at": utc_now(),
 
         }
 
@@ -1091,7 +1090,7 @@ class SearchRepository(BaseRepository):
             document["rank"] = rank
 
             document["created_at"] = (
-                datetime.utcnow()
+                utc_now()
             )
 
             documents.append(
@@ -1177,7 +1176,7 @@ class SearchRepository(BaseRepository):
 
                     "reasoning_generated": True,
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             },
@@ -1296,7 +1295,7 @@ class SearchRepository(BaseRepository):
 
                     "status": "SHORTLISTED",
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             },
@@ -1326,7 +1325,7 @@ class SearchRepository(BaseRepository):
 
                     "status": "REJECTED",
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             },
@@ -1359,7 +1358,7 @@ class SearchRepository(BaseRepository):
 
                     "status": "PENDING",
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             },
@@ -1392,7 +1391,7 @@ class SearchRepository(BaseRepository):
 
                     "status": "PENDING",
 
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
 
                 }
             },

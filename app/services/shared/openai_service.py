@@ -17,18 +17,27 @@ class OpenAIService:
     def generate(
         self,
         messages,
+        json_mode: bool = False,
+        max_tokens: int = 1200,
     ) -> str:
         try:
             for attempt in range(3):
                 try:
-                    logger.info(type(messages))
-                    logger.info(messages)
+                    kwargs = {
+                        "model": self.model,
+                        "messages": messages,
+                        "temperature": 0,
+                        "max_tokens": max_tokens,
+                    }
+
+                    if json_mode:
+                        kwargs["response_format"] = {
+                            "type": "json_object",
+                        }
 
                     response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
+                        **kwargs
                     )
-                    logger.info("response: ",response)
                     content = response.choices[0].message.content
                     return content.strip()
                 except Exception as e:
@@ -38,7 +47,7 @@ class OpenAIService:
                     logger.exception(e)
                     if attempt == 2:
                         raise
-                    time.sleep(5)
+                    time.sleep(2)
         except Exception as e:
             logger.exception(e)
             raise
@@ -48,7 +57,8 @@ class OpenAIService:
     ) -> dict:
 
         response = self.generate(
-            messages
+            messages,
+            json_mode=True,
         )
 
         logger.info(

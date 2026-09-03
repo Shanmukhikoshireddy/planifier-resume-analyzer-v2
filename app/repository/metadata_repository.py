@@ -1,6 +1,6 @@
 from datetime import datetime
 from app.repository.base_repository import BaseRepository
-
+from app.utils.datetime_utils import utc_now
 class MetadataRepository(BaseRepository):
     """
     Stores processed Resume objects.
@@ -32,7 +32,7 @@ class MetadataRepository(BaseRepository):
         file_hash: str,
         status: str,
     ):
-        now = datetime.utcnow()
+        now = utc_now()
         self.collection.update_one(
             {"object_path": object_path,},
             {
@@ -55,7 +55,7 @@ class MetadataRepository(BaseRepository):
         self,
         object_path: str,
     ):
-        now = datetime.utcnow()
+        now = utc_now()
         self.collection.update_one(
             {
                 "object_path": object_path,
@@ -87,7 +87,7 @@ class MetadataRepository(BaseRepository):
             {
                 "$set": {
                     "status": status,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
             },
         )

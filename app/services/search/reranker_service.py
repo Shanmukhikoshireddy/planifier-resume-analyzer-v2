@@ -18,7 +18,8 @@ class RerankerService:
                 f"Loading Reranker : {settings.RERANKER_MODEL}"
             )
             RerankerService._model = CrossEncoder(
-                settings.RERANKER_MODEL
+                settings.RERANKER_MODEL,
+                max_length=256,
             )
             logger.info( "Reranker Loaded.")
         self.model = RerankerService._model
@@ -117,7 +118,7 @@ class RerankerService:
                 )
             )
 
-        return "\n".join(sections)
+        return "\n".join(sections)[: settings.RERANK_MAX_CHARS]
 
     # Batch Rerank
     def rerank_candidates(
@@ -133,7 +134,9 @@ class RerankerService:
             for candidate in candidates
         ]
         scores = self.model.predict(
-            pairs
+            pairs,
+            batch_size=16,
+            show_progress_bar=False,
         )
         for candidate, score in zip(
             candidates,

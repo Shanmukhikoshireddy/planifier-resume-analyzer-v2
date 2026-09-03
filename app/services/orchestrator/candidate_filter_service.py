@@ -935,18 +935,38 @@ class CandidateFilterService:
     # ============================================================
     # LOCATION
     # ============================================================
+    
+    def normalize_location(
+        self,
+        location,
+    ):
+        location = self.clean_text(
+            location
+        )
 
+        if not location:
+            return ""
+
+        # Keep the first location component
+        location = re.split(
+            r"[,/|]",
+            location,
+            maxsplit=1,
+        )[0].strip()
+
+        return location
     def filter_by_location(
         self,
         candidates,
         job,
     ):
 
-        location = self.clean_text(
-            job.get(
-                "location",
-                "",
-            )
+        location = job.get("location", "")
+
+        logger.info(
+            "JOB LOCATION: %r | TYPE: %s",
+            location,
+            type(location).__name__,
         )
 
         if not location:
@@ -956,21 +976,20 @@ class CandidateFilterService:
 
         for candidate in candidates:
 
-            candidate_location = self.clean_text(
-                candidate.get(
-                    "location",
-                    "",
-                )
+            candidate_location = candidate.get(
+                "location",
+                "",
             )
 
-            if self.contains_phrase(
-                candidate_location,
-                location,
-            ):
+            if str(location).lower().strip() in str(
+                candidate_location
+            ).lower().strip():
 
-                results.append(
-                    candidate
-                )
+                results.append(candidate)
+
+        logger.info(
+            f"Location '{location}' matched {len(results)}/{len(candidates)} candidates."
+        )
 
         return results
     # --------------------------------------------------

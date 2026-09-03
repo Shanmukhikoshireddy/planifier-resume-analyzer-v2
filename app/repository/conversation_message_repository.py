@@ -2,7 +2,7 @@ from datetime import datetime
 from bson import ObjectId
 from app.config.logging import logger
 from app.repository.base_repository import BaseRepository
-
+from app.utils.datetime_utils import utc_now
 
 class ConversationMessageRepository(BaseRepository):
 
@@ -35,9 +35,9 @@ class ConversationMessageRepository(BaseRepository):
 
             "metadata": metadata or {},
 
-            "created_at": datetime.utcnow(),
+            "created_at": utc_now(),
 
-            "updated_at": datetime.utcnow(),
+            "updated_at": utc_now(),
 
         }
 
@@ -86,7 +86,7 @@ class ConversationMessageRepository(BaseRepository):
             {
                 "$set": {
                     "assistant_message": assistant_message,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
             },
         )

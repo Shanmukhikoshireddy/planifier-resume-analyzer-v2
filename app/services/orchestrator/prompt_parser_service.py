@@ -5,6 +5,21 @@ from app.prompts.job_prompt import (
     build_job_prompt,
     build_modification_prompt,
 )
+import re
+
+
+_ACTION_INTENT = re.compile(
+    r"\b(shortlist|unshortlist|reject|undo|reason|history|reset|"
+    r"show shortlisted|show rejected)\b",
+    re.IGNORECASE,
+)
+_SEARCH_INTENT = re.compile(
+    r"\b(find|search|get|show|need|looking|candidates?|profiles?|"
+    r"developer|engineer|years?|skill|experience)\b",
+    re.IGNORECASE,
+)
+
+
 class PromptParserService:
 
     def __init__(self):
@@ -15,6 +30,10 @@ class PromptParserService:
         logger.info("=" * 80)
         logger.info("INTENT DETECTION")
         logger.info("=" * 80)
+
+        if prompt and not _ACTION_INTENT.search(prompt) and _SEARCH_INTENT.search(prompt):
+            logger.info("Fast intent: SEARCH")
+            return {"intent": "SEARCH"}
 
         llm_prompt = build_intent_prompt(prompt)
 

@@ -162,6 +162,11 @@ class AssistantService:
                 r"\bnarrow\s+(?:the\s+)?search",
                 r"\bfilter\s+(?:the\s+)?(?:results|candidates|profiles)",
                 r"\bmake\s+the\s+search\s+",
+                r"\b\d+\s+years?\s+(?:of\s+)?experience\b",
+                r"\bwith\s+\d+\s+years?\s+(?:of\s+)?experience\b",
+                r"\bhaving\s+\d+\s+years?\s+(?:of\s+)?experience\b",
+                r"\bwho\s+(?:have|has)\s+\d+\s+years?\s+(?:of\s+)?experience\b",
+                r"\b\d+\s*\+\s*years?\b",
             ]
 
             is_explicit_modification = any(
@@ -1074,16 +1079,26 @@ Return the updated complete search.
         messages = conversation.get("messages", [])
 
         for message in reversed(messages):
+
+            if not isinstance(message, dict):
+                continue
+
             if message.get("role") != "assistant":
                 continue
 
-            content = message.get("content") or {}
+            content = message.get("content")
+
+            if not isinstance(content, dict):
+                continue
 
             if content.get("type") == "SEARCH":
+
                 previous_result_message_id = (
                     content.get("conversation_message_id")
                 )
-                break
+
+                if previous_result_message_id:
+                    break
 
         logger.info(
             f"Previous result message id: "

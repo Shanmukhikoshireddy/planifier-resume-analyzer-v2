@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from app.utils.datetime_utils import utc_now
 from app.repository.base_repository import BaseRepository
 
 
@@ -36,13 +36,13 @@ class JobVsCandidateRepository(BaseRepository):
                     "applicant_id": applicant_id,
                     "status": status,
                     "is_global_profile": is_global_profile,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 },
                 "$setOnInsert": {
                     "job_id": job_id,
                     "search_id": search_id,
                     "profile_id": profile_id,
-                    "created_at": datetime.utcnow(),
+                    "created_at": utc_now(),
                 },
             },
             upsert=True,

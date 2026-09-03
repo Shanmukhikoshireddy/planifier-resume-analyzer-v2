@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from app.repository.base_repository import BaseRepository
-
+from app.utils.datetime_utils import utc_now
 class EmbeddingRepository(BaseRepository):
     def __init__(self):
         super().__init__()
@@ -22,7 +22,7 @@ class EmbeddingRepository(BaseRepository):
             "dimension": dimension,
             "job_position": job_position,
             "uploaded_at": uploaded_at,
-            "created_at": datetime.utcnow(),
+            "created_at": utc_now(),
         }
         self.collection.insert_one(document)
 
@@ -58,7 +58,7 @@ class EmbeddingRepository(BaseRepository):
             filter_query["job_position"] = job_position
 
         if received_within != "ALL":
-            now = datetime.utcnow()
+            now = utc_now()
             if received_within == "LAST_WEEK":
                 filter_query["uploaded_at"] = {
                     "$gte": now - timedelta(days=7)
@@ -142,7 +142,7 @@ class EmbeddingRepository(BaseRepository):
             {
                 "$set": {
                     "embedding": embedding,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
             }
         )

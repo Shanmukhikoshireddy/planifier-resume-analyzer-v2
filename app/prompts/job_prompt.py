@@ -203,7 +203,8 @@ CORE EXTRACTION RULES
 4. Extract only requirements supported by the input.
 5. Remove duplicates.
 6. Normalize obvious technology-name variations.
-7. Return ONLY the job object. Never return an intent.
+7. Return ONLY the JSON structure shown above, including the "job" wrapper.
+   Never return an intent.
 8. Never return markdown or explanations.
 
 ------------------------------------------------
@@ -384,7 +385,37 @@ Strings -> ""
 Arrays -> []
 Numbers -> null
 Operators -> null when not applicable
+Return ONLY valid JSON in exactly this structure:
 
+{
+    "job": {
+        "title": "",
+        "experience": {
+            "min": null,
+            "max": null,
+            "min_operator": null,
+            "max_operator": null
+        },
+        "education": {
+            "value": "",
+            "search_terms": []
+        },
+        "location": "",
+        "required_skills": [],
+        "preferred_skills": [],
+        "excluded_skills": [],
+        "certifications": [],
+        "responsibilities": [],
+        "qualifications": [],
+        "nice_to_have": [],
+        "keywords": []
+    }
+}
+
+The "job" wrapper is mandatory.
+Never return the fields directly at the top level.
+Never return markdown.
+Never explain.
 Return ONLY valid JSON.
 Never explain.
 Never return markdown.

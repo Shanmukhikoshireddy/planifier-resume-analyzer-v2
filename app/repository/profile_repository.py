@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from app.repository.base_repository import BaseRepository
 from bson import ObjectId
 from app.config.logging import logger
-
+from app.config.settings import settings
+from app.utils.datetime_utils import utc_now
 class ProfileRepository(BaseRepository):
     def __init__(self):
         super().__init__()
@@ -23,8 +24,8 @@ class ProfileRepository(BaseRepository):
 
         profile["profile_embedding"] = embedding
 
-        profile["created_at"] = datetime.utcnow()
-        profile["updated_at"] = datetime.utcnow()
+        profile["created_at"] = utc_now()
+        profile["updated_at"] = utc_now()
         profile["is_deleted"] = False
         profile["applicant_id"] = applicant_id
 
@@ -91,7 +92,7 @@ class ProfileRepository(BaseRepository):
         profile_id: str,
         update_fields: dict,
     ):
-        update_fields["updated_at"] = datetime.utcnow()
+        update_fields["updated_at"] = utc_now()
 
         self.collection.update_one(
             {"_id": ObjectId(profile_id)},
@@ -167,7 +168,7 @@ class ProfileRepository(BaseRepository):
             {
                 "$set": {
                     "is_deleted": True,
-                    "deleted_at": datetime.utcnow(),
+                    "deleted_at": utc_now(),
                 }
             }
         )
@@ -186,7 +187,7 @@ class ProfileRepository(BaseRepository):
                 filter_query["job_id"] = job_position_id
     
             if received_within != "ALL":
-                now = datetime.utcnow()
+                now = utc_now()
                 if received_within == "LAST_WEEK":
                     filter_query["applied_date"] = {
                         "$gte": now - timedelta(days=7)
@@ -213,8 +214,8 @@ class ProfileRepository(BaseRepository):
                 "index": "resume_vector_index",
                 "path": "profile_embedding",
                 "queryVector": embedding,
-                "numCandidates": 1000,
-                "limit": 1000,
+                "numCandidates": settings.VECTOR_SEARCH_CANDIDATES,
+                "limit": settings.VECTOR_SEARCH_LIMIT,
             }
     
             # Apply filter only when required
@@ -243,6 +244,7 @@ class ProfileRepository(BaseRepository):
                         "candidate_name": 1,
 
                         "designation": 1,
+                        "location": 1,
 
                         "experience_years": 1,
 
