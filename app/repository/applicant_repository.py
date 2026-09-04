@@ -3,6 +3,7 @@ from datetime import datetime
 from app.repository.base_repository import BaseRepository
 from app.config.logging import logger
 from app.config.mongo import planifier_db
+from app.utils.datetime_utils import utc_now
 class ApplicantRepository:
     def __init__(self):
 
