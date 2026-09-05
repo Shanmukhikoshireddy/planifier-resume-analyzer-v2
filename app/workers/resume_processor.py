@@ -53,24 +53,7 @@ class ResumeProcessor:
             resume_url
             )
 
-            pdf_resume = None
-
-            if local_resume.suffix.lower() == ".docx":
-
-                logger.info(
-                    "Converting DOCX to PDF..."
-                )
-
-
-                pdf_resume = self.converter.convert_docx_to_pdf(
-                    str(local_resume)
-                )
-
-                logger.info(
-                    f"PDF Created : {pdf_resume}"
-                )
-
-            # Parse Resume
+            # Parse Resume (ParserService natively supports both PDF and DOCX)
             parsed_resume = self._parse_resume(
                 local_resume
             )

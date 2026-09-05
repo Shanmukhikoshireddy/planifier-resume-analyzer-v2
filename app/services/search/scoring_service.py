@@ -93,8 +93,8 @@ class ScoringService:
         return 0
 
     # existing ranking logic below
+    @staticmethod
     def normalize_education(
-        self,
         value,
     ):
         if not value:
@@ -982,14 +982,17 @@ class ScoringService:
             "ATS Scoring Completed."
         )
 
-        return self.generate_reasoning(
-            search_id=search_id,
-            candidates=scored_candidates,
-            total_candidates=total_candidates,
-            total_pages=total_pages,
-            page=page,
-            page_size=page_size,
-        )
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        return {
+            "search_id": search_id,
+            "candidates": scored_candidates[start:end],
+            "total_candidates": total_candidates,
+            "total_pages": total_pages,
+            "page": page,
+            "page_size": page_size,
+        }
 
 
     def get_dynamic_weights(

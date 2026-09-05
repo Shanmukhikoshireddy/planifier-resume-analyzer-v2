@@ -378,6 +378,15 @@ Important:
   "at least", "or more", "less than", or "up to", treat it as EXACTLY N years.
 
 ------------------------------------------------
+LOCATION RULES
+------------------------------------------------
+
+- Positive location (e.g. "Hyderabad", "Bangalore", "in Pune"):
+  location = "Hyderabad"
+- Negative location / excluded location (e.g. "not in Hyderabad", "outside Hyderabad", "exclude Hyderabad", "not from Hyderabad"):
+  location = "NOT Hyderabad"
+
+------------------------------------------------
 MISSING VALUES
 ------------------------------------------------
 
@@ -600,6 +609,12 @@ min=2
 max=2
 min_operator=">="
 max_operator="<="
+
+LOCATION RULES:
+
+- Positive location: (e.g. "Hyderabad", "in Bangalore", "Hitech City Hyderabad", "in Hitech City, Hyderabad") -> location="Hyderabad", location="Hitech City, Hyderabad"
+- Locality / area with city: (e.g. "Hitech City Hyderabad", "Whitefield Bangalore", "Gachibowli Hyderabad") are location modifications, NOT job titles. Put in location, leave title=""
+- Negative location: (e.g. "not in Hyderabad", "outside Hyderabad", "exclude Hyderabad") -> location="NOT Hyderabad"
 
 Return ONLY valid JSON.
 """,

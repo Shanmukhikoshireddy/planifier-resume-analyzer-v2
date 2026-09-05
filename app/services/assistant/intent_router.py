@@ -94,6 +94,9 @@ class IntentRouter:
             "SHOW_REJECTED":
                 assistant.show_rejected,
 
+            "SHOW_CANDIDATES":
+                assistant.show_candidates,
+
             "UNDO_SHORTLIST":
                 assistant.undo_shortlist,
 

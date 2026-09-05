@@ -1,5 +1,5 @@
 from pathlib import Path
-from docx2pdf import convert
+import subprocess
 
 from app.config.logging import logger
 
@@ -12,17 +12,32 @@ class PdfConverterService:
     ) -> str:
 
         docx_path = Path(docx_path)
-
+        output_dir = docx_path.parent
         pdf_path = docx_path.with_suffix(".pdf")
 
         logger.info(
             f"Converting {docx_path.name} -> {pdf_path.name}"
         )
 
-        convert(
-            str(docx_path),
-            str(pdf_path),
+        subprocess.run(
+            [
+                "libreoffice",
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                str(output_dir),
+                str(docx_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
         )
+
+        if not pdf_path.exists():
+            raise RuntimeError(
+                f"PDF conversion failed: {docx_path.name}"
+            )
 
         logger.info(
             "PDF Conversion Successful."

@@ -22,3 +22,17 @@ class JobPositionRepository(BaseRepository):
         logger.info(f"Job: {job}")
 
         return job
+
+    def find_by_title(self, title: str):
+        if not title:
+            return None
+        import re
+        regex = re.escape(title.strip())
+        return self.collection.find_one({
+            "$or": [
+                {"title": {"$regex": regex, "$options": "i"}},
+                {"job_title": {"$regex": regex, "$options": "i"}},
+                {"job_position": {"$regex": regex, "$options": "i"}},
+                {"position": {"$regex": regex, "$options": "i"}},
+            ]
+        })

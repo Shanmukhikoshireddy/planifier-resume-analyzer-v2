@@ -185,6 +185,8 @@ Return
 CANDIDATE_REASONING
 ------------------------------------------------
 
+Use CANDIDATE_REASONING when the recruiter asks why a candidate matches, was selected, shortlisted, or ranked.
+
 Return
 
 {
@@ -192,13 +194,31 @@ Return
     "candidate_name":""
 }
 
+Rules:
+- If a specific candidate name is mentioned, extract it into "candidate_name".
+- If pronouns or generic phrases are used (such as "he", "him", "she", "this candidate", "the candidate"), leave "candidate_name": "".
+
 Examples
 
 Why Rahul?
 
+Why is Rahul a good match?
+
+Why was he selected?
+
+Why he selected?
+
+Why is he selected?
+
+Why did you select Rahul?
+
+Why this candidate?
+
 Explain Alex.
 
 Why Alex ranked first?
+
+Reason for Rahul
 
 ------------------------------------------------
 SEARCH_HISTORY

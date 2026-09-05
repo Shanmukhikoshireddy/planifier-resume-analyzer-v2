@@ -9,13 +9,13 @@ import re
 
 
 _ACTION_INTENT = re.compile(
-    r"\b(shortlist|unshortlist|reject|undo|reason|history|reset|"
+    r"\b(shortlist|shortlisted|unshortlist|reject|rejected|undo|reason|reasoning|why|explain|history|reset|"
     r"show shortlisted|show rejected)\b",
     re.IGNORECASE,
 )
 _SEARCH_INTENT = re.compile(
     r"\b(find|search|get|show|need|looking|candidates?|profiles?|"
-    r"developer|engineer|years?|skill|experience)\b",
+    r"developer|engineer|years?|skill|experience|location|hyderabad|bangalore|pune|mumbai|delhi|chennai|noida|gurgaon|hitech)\b",
     re.IGNORECASE,
 )
 
@@ -30,6 +30,78 @@ class PromptParserService:
         logger.info("=" * 80)
         logger.info("INTENT DETECTION")
         logger.info("=" * 80)
+
+        # Fast action intent detection
+        if prompt:
+            prompt_lower = prompt.lower().strip()
+            prompt_clean = re.sub(r"[.,?!:;]+$", "", prompt_lower).strip()
+
+            # Fast SHOW_SHORTLISTED
+            if re.search(r"\b(?:show|get|give|want|list|view|see)?\s*(?:all\s+)?(?:candidates?\s+)?(?:who\s+are\s+)?shortlisted\b", prompt_clean):
+                job_match = re.search(
+                    r"shortlisted\s+(?:candidates?\s+)?(?:for|in|as|under)\s+([a-zA-Z0-9_\s\-/]+)",
+                    prompt_clean,
+                )
+                job_pos = job_match.group(1).strip() if job_match else ""
+                job_pos = re.sub(r"\s+(?:candidates?|profiles?)$", "", job_pos).strip()
+                logger.info(f"Fast intent: SHOW_SHORTLISTED (job_position={job_pos})")
+                return {"intent": "SHOW_SHORTLISTED", "job_position": job_pos}
+
+            # Fast SHOW_REJECTED
+            if re.search(r"\b(?:show|get|give|want|list|view|see)?\s*(?:all\s+)?(?:candidates?\s+)?(?:who\s+are\s+)?rejected\b", prompt_clean):
+                job_match = re.search(
+                    r"rejected\s+(?:candidates?\s+)?(?:for|in|as|under)\s+([a-zA-Z0-9_\s\-/]+)",
+                    prompt_clean,
+                )
+                job_pos = job_match.group(1).strip() if job_match else ""
+                job_pos = re.sub(r"\s+(?:candidates?|profiles?)$", "", job_pos).strip()
+                logger.info(f"Fast intent: SHOW_REJECTED (job_position={job_pos})")
+                return {"intent": "SHOW_REJECTED", "job_position": job_pos}
+
+            # Fast SHOW_CANDIDATES
+            show_candidates_patterns = [
+                r"^(?:show|give|display|list|view|get|see)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?candidates?(?:\s+list)?$",
+                r"^i\s+want\s+(?:all\s+)?(?:the\s+)?candidates?(?:\s+list)?$",
+                r"^(?:all\s+)?candidates?(?:\s+list)?$",
+                r"^show\s+current\s+candidates?$",
+                r"^(?:what|which)\s+(?:are\s+the\s+)?candidates?(?:\s+list)?$",
+            ]
+            if any(re.search(pat, prompt_clean) for pat in show_candidates_patterns):
+                logger.info("Fast intent: SHOW_CANDIDATES")
+                return {"intent": "SHOW_CANDIDATES"}
+
+            # Fast CANDIDATE_REASONING (pronouns / generic)
+            reasoning_pronoun_pattern = (
+                r"\bwhy\s+(?:is\s+|was\s+|did\s+you\s+select\s+)?(?:he|him|she|they|this\s+candidate|the\s+candidate)?\s*"
+                r"(?:selected|shortlisted|chosen|recommended|ranked|a\s+good\s+(?:match|fit))\b"
+            )
+            if re.search(reasoning_pronoun_pattern, prompt_clean):
+                logger.info("Fast intent: CANDIDATE_REASONING (pronoun/generic)")
+                return {"intent": "CANDIDATE_REASONING", "candidate_name": ""}
+
+            # Fast CANDIDATE_REASONING (named candidate)
+            reasoning_named_match = re.search(
+                r"\bwhy\s+(?:is\s+|was\s+)?([a-zA-Z\s]+?)\s+(?:selected|shortlisted|chosen|recommended|ranked|a\s+good\s+(?:match|fit))\b",
+                prompt_clean,
+            )
+            if reasoning_named_match:
+                extracted_name = reasoning_named_match.group(1).strip()
+                extracted_name = re.sub(r"^(?:is|was)\s+", "", extracted_name).strip()
+                if extracted_name.lower() in ("he", "him", "she", "they", "this candidate", "the candidate"):
+                    extracted_name = ""
+                logger.info(f"Fast intent: CANDIDATE_REASONING (candidate_name={extracted_name})")
+                return {"intent": "CANDIDATE_REASONING", "candidate_name": extracted_name}
+
+            # Fast simple reasoning queries like "why rahul", "explain alex"
+            simple_reasoning_match = re.search(
+                r"^(?:why|explain|reason\s+for)\s+([a-zA-Z]+)(?:\s+(?:profile|candidate))?\??$",
+                prompt_clean,
+            )
+            if simple_reasoning_match:
+                extracted_name = simple_reasoning_match.group(1).strip()
+                if extracted_name.lower() not in ("he", "him", "she", "they", "this", "that", "it"):
+                    logger.info(f"Fast intent: CANDIDATE_REASONING (candidate_name={extracted_name})")
+                    return {"intent": "CANDIDATE_REASONING", "candidate_name": extracted_name}
 
         if prompt and not _ACTION_INTENT.search(prompt) and _SEARCH_INTENT.search(prompt):
             logger.info("Fast intent: SEARCH")
@@ -60,6 +132,7 @@ class PromptParserService:
             "REJECT",
             "SHOW_SHORTLISTED",
             "SHOW_REJECTED",
+            "SHOW_CANDIDATES",
             "UNDO_SHORTLIST",
             "UNDO_REJECT",
             "CANDIDATE_REASONING",

@@ -88,15 +88,15 @@ class SearchService:
 
             search_context["search_id"] = search_id
 
-        parsed_search = search_context["parsed_search"]
+        parsed_search = search_context.get("parsed_search", {})
 
-        job_position_id = search_context["job_position_id"]
+        job_position_id = search_context.get("job_position_id")
 
-        received_within = search_context["received_within"]
+        received_within = search_context.get("received_within")
 
-        global_search_allowed = search_context["global_search_allowed"]
+        global_search_allowed = search_context.get("global_search_allowed", True)
 
-        original_prompt = search_context["original_prompt"]
+        original_prompt = search_context.get("original_prompt", "")
 
         # is_new_search is intentionally honored by execute() as a fresh
         # vector-search request. Previous candidates are only reused by
@@ -491,6 +491,18 @@ class SearchService:
                 previous_result_message_id
             )
         )
+
+        if not previous_candidates and search_id:
+            logger.info(
+                f"previous_result_message_id {previous_result_message_id} had no results. "
+                f"Trying get_latest_search_results fallback for search_id={search_id}."
+            )
+            previous_candidates = (
+                self.search_repository
+                .get_latest_search_results(
+                    search_id
+                )
+            )
 
         logger.info(
             f"Loaded {len(previous_candidates)} previous candidates."
@@ -1306,11 +1318,24 @@ Current Company
 
             logger.info("Reasoning Cache Hit.")
 
+            candidate = self.search_repository.get_candidate(
+                search_id,
+                profile_id,
+            )
+
             return {
 
                 "profile_id": profile_id,
 
+                "candidate_name": candidate.get("candidate_name") if candidate else None,
+
                 "reasoning": cached["reasoning"],
+
+                "message": cached["reasoning"],
+
+                "answer": cached["reasoning"],
+
+                "success": True,
             }
 
 
@@ -1597,6 +1622,14 @@ Current Company
 
             "profile_id": profile_id,
 
+            "candidate_name": candidate.get("candidate_name") if candidate else None,
+
             "reasoning": reasoning,
+
+            "message": reasoning,
+
+            "answer": reasoning,
+
+            "success": True,
 
         }

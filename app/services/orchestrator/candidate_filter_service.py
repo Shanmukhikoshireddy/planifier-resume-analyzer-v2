@@ -51,6 +51,38 @@ class CandidateFilterService:
 
     TECHNICAL_ROLE_SKILLS = {
 
+        "software engineer": {
+            "software",
+            "developer",
+            "engineer",
+            "programming",
+            "python",
+            "java",
+            "javascript",
+            "typescript",
+            "c++",
+            "c#",
+            "backend",
+            "frontend",
+            "fullstack",
+        },
+
+        "software developer": {
+            "software",
+            "developer",
+            "engineer",
+            "programming",
+            "python",
+            "java",
+            "javascript",
+            "typescript",
+            "c++",
+            "c#",
+            "backend",
+            "frontend",
+            "fullstack",
+        },
+
         "python developer": {
             "python",
         },
@@ -186,7 +218,7 @@ class CandidateFilterService:
 
         candidates = self.filter_by_experience(
             candidates,
-            job,
+            job.get("experience") or {},
         )
 
         logger.info(
@@ -300,6 +332,13 @@ class CandidateFilterService:
 
         if not experience:
             return candidates
+
+        if (
+            isinstance(experience, dict)
+            and "experience" in experience
+            and isinstance(experience["experience"], dict)
+        ):
+            experience = experience["experience"]
 
         minimum = experience.get("min")
         maximum = experience.get("max")
@@ -575,6 +614,38 @@ class CandidateFilterService:
         )
 
         technical_aliases = {
+            "software engineer": {
+                "software engineer",
+                "software developer",
+                "software development engineer",
+                "sde",
+                "software programmer",
+                "swe",
+                "software engineering",
+                "sr software engineer",
+                "senior software engineer",
+                "lead software engineer",
+                "principal software engineer",
+                "associate software engineer",
+                "member of technical staff",
+                "mts",
+            },
+
+            "software developer": {
+                "software engineer",
+                "software developer",
+                "software development engineer",
+                "sde",
+                "software programmer",
+                "swe",
+                "software engineering",
+                "sr software developer",
+                "senior software developer",
+                "lead software developer",
+                "principal software developer",
+                "associate software developer",
+            },
+
             "python developer": {
                 "python developer",
                 "python engineer",
@@ -955,6 +1026,121 @@ class CandidateFilterService:
         )[0].strip()
 
         return location
+    @staticmethod
+    def normalize_location_text(text: str) -> str:
+        """
+        Normalize location string:
+        - Handle common tech city/corridor variations (e.g. Hi-Tech / HITEC / Hitech -> hitech)
+        - Canonicalize city names (Bengaluru -> Bangalore, Gurugram -> Gurgaon, Bombay -> Mumbai)
+        - Replace punctuation (commas, hyphens, slashes, parens) with spaces
+        - Collapse multiple whitespace characters
+        """
+        if not text:
+            return ""
+        t = str(text).lower()
+        # Hi-Tech / HITEC City normalization
+        t = re.sub(r"\bhi[- ]?tech\b", "hitech", t)
+        t = re.sub(r"\bhitec\b", "hitech", t)
+        # Indian major tech city canonicalization
+        t = re.sub(r"\bbengaluru\b", "bangalore", t)
+        t = re.sub(r"\bgurugram\b", "gurgaon", t)
+        t = re.sub(r"\bbombay\b", "mumbai", t)
+        t = re.sub(r"\bmadras\b", "chennai", t)
+        t = re.sub(r"\bcalcutta\b", "kolkata", t)
+        # Punctuation to space
+        t = re.sub(r"[,\-_/\\|;:.~`'\"()\[\]{}]+", " ", t)
+        return re.sub(r"\s+", " ", t).strip()
+
+    @classmethod
+    def _candidate_matches_single_location(cls, candidate, loc_target: str) -> bool:
+        if not loc_target:
+            return False
+        norm_target = cls.normalize_location_text(loc_target)
+        if not norm_target:
+            return False
+
+        target_tokens = norm_target.split()
+        location_filler = {"city", "area", "district", "region", "town", "state", "near", "in", "at", "the", "of", "and"}
+        sig_tokens = [tok for tok in target_tokens if tok not in location_filler]
+        if not sig_tokens:
+            sig_tokens = target_tokens
+
+        # Major tech cities for conflict resolution
+        major_cities = {
+            "hyderabad", "bangalore", "chennai", "pune", "mumbai", "delhi", "noida",
+            "gurgaon", "kolkata", "ahmedabad", "kochi", "trivandrum", "chandigarh",
+            "indore", "jaipur", "coimbatore",
+        }
+
+        # Area to city mapping
+        area_to_city = {
+            "hitech": "hyderabad",
+            "gachibowli": "hyderabad",
+            "madhapur": "hyderabad",
+            "kondapur": "hyderabad",
+            "kukatpally": "hyderabad",
+            "whitefield": "bangalore",
+            "electronic": "bangalore",
+            "koramangala": "bangalore",
+            "manyata": "bangalore",
+            "hinjewadi": "pune",
+            "magarpatta": "pune",
+        }
+
+        # 1. Structured location fields from profile
+        cand_loc_str = str(candidate.get("location") or "")
+        city = str(candidate.get("city") or "")
+        address = str(candidate.get("address") or "")
+        state = str(candidate.get("state") or "")
+        country = str(candidate.get("country") or "")
+        current_company = str(candidate.get("current_company") or "")
+
+        structured_parts = [cand_loc_str, city, address, state, country, current_company]
+        structured_raw = " ".join(p for p in structured_parts if p).strip()
+        norm_structured = cls.normalize_location_text(structured_raw)
+
+        if norm_structured:
+            # Direct normalized substring match
+            if norm_target in norm_structured:
+                return True
+            # Word boundary regex match
+            if re.search(r"\b" + re.escape(norm_target) + r"\b", norm_structured):
+                return True
+            # All significant tokens present in structured location
+            if all(tok in norm_structured for tok in sig_tokens):
+                return True
+            # Check if any area in target maps to city in structured location
+            for area, mapped_city in area_to_city.items():
+                if area in sig_tokens and (area in norm_structured or (mapped_city in norm_structured and area in norm_target)):
+                    remaining_sig = [t for t in sig_tokens if t != area and t != mapped_city]
+                    if not remaining_sig or all(t in norm_structured for t in remaining_sig):
+                        if area in norm_structured or mapped_city in norm_structured:
+                            return True
+
+        # Check for major city conflict before falling back to summary/resume_text
+        target_major_cities = {tok for tok in sig_tokens if tok in major_cities}
+        structured_major_cities = {c for c in major_cities if c in norm_structured}
+
+        # If candidate is explicitly located in city A and target is city B, do not match
+        if target_major_cities and structured_major_cities and not (target_major_cities & structured_major_cities):
+            return False
+
+        # 2. Fallback to summary and resume_text
+        summary = cls.normalize_location_text(candidate.get("summary") or "")
+        resume_text = cls.normalize_location_text(candidate.get("resume_text") or "")
+        unstructured = f"{summary} {resume_text}".strip()
+
+        if unstructured:
+            combined = f"{norm_structured} {unstructured}".strip()
+            if norm_target in combined:
+                return True
+            if re.search(r"\b" + re.escape(norm_target) + r"\b", combined):
+                return True
+            if all(tok in combined for tok in sig_tokens):
+                return True
+
+        return False
+
     def filter_by_location(
         self,
         candidates,
@@ -962,33 +1148,81 @@ class CandidateFilterService:
     ):
 
         location = job.get("location", "")
+        excluded_locations = job.get("excluded_locations") or []
+        if isinstance(excluded_locations, str):
+            excluded_locations = [excluded_locations]
 
         logger.info(
-            "JOB LOCATION: %r | TYPE: %s",
+            "JOB LOCATION: %r | EXCLUDED LOCATIONS: %r",
             location,
-            type(location).__name__,
+            excluded_locations,
         )
 
-        if not location:
+        positive_target = None
+        negative_targets = [
+            str(el).lower().strip() for el in excluded_locations if str(el).strip()
+        ]
+
+        if location:
+            loc_str = str(location).strip()
+            loc_lower = loc_str.lower()
+
+            neg_prefixes = [
+                "not in ",
+                "not ",
+                "outside ",
+                "exclude ",
+                "excluding ",
+                "except ",
+                "!",
+                "-",
+            ]
+            is_neg = False
+            for prefix in neg_prefixes:
+                if loc_lower.startswith(prefix):
+                    neg_val = loc_str[len(prefix):].strip()
+                    if neg_val:
+                        negative_targets.append(neg_val.lower())
+                        is_neg = True
+                    break
+
+            if not is_neg and loc_lower:
+                positive_target = loc_lower
+
+        # Prune negative targets that conflict with an explicit positive target
+        if positive_target:
+            norm_pos = self.normalize_location_text(positive_target)
+            negative_targets = [
+                nt for nt in negative_targets
+                if self.normalize_location_text(nt) not in norm_pos
+                and norm_pos not in self.normalize_location_text(nt)
+            ]
+
+        if not positive_target and not negative_targets:
             return candidates
 
         results = []
 
         for candidate in candidates:
+            # Check negative targets first: if candidate matches any excluded location, drop them
+            excluded = False
+            for neg_target in negative_targets:
+                if self._candidate_matches_single_location(candidate, neg_target):
+                    excluded = True
+                    break
 
-            candidate_location = candidate.get(
-                "location",
-                "",
-            )
+            if excluded:
+                continue
 
-            if str(location).lower().strip() in str(
-                candidate_location
-            ).lower().strip():
+            # If a positive target is specified, candidate must match it
+            if positive_target:
+                if not self._candidate_matches_single_location(candidate, positive_target):
+                    continue
 
-                results.append(candidate)
+            results.append(candidate)
 
         logger.info(
-            f"Location '{location}' matched {len(results)}/{len(candidates)} candidates."
+            f"Location filter (pos={positive_target}, neg={negative_targets}) matched {len(results)}/{len(candidates)} candidates."
         )
 
         return results

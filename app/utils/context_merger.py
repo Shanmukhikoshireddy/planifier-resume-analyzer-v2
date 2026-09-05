@@ -1,4 +1,5 @@
 from copy import deepcopy
+import re
 
 
 class ContextMerger:
@@ -40,6 +41,17 @@ class ContextMerger:
                 {},
             ]:
                 merged[field] = value
+
+        # If a positive location was explicitly set, clear conflicting excluded_locations
+        if current.get("location"):
+            loc_val = str(current.get("location")).strip().lower()
+            if not loc_val.startswith(("not ", "outside ", "exclude ", "except ", "!")):
+                norm_pos = re.sub(r"[,\-_/\\|;:.~`'\"()\[\]{}]+", " ", loc_val).strip()
+                merged["excluded_locations"] = [
+                    el for el in merged.get("excluded_locations", [])
+                    if re.sub(r"[,\-_/\\|;:.~`'\"()\[\]{}]+", " ", str(el).lower()).strip() not in norm_pos
+                    and norm_pos not in re.sub(r"[,\-_/\\|;:.~`'\"()\[\]{}]+", " ", str(el).lower()).strip()
+                ]
 
         current_education = (
            current.get("education")
@@ -224,6 +236,37 @@ class ContextMerger:
             ),
             current.get(
                 "excluded_skills",
+                [],
+            ),
+        )
+
+        ####################################################
+        # Excluded Locations
+        ####################################################
+
+        if current.get("excluded_locations"):
+            merged["excluded_locations"] = self.merge_strings(
+                merged.get(
+                    "excluded_locations",
+                    [],
+                ),
+                current.get(
+                    "excluded_locations",
+                    [],
+                ),
+            )
+
+        ####################################################
+        # Excluded Locations
+        ####################################################
+
+        merged["excluded_locations"] = self.merge_strings(
+            merged.get(
+                "excluded_locations",
+                [],
+            ),
+            current.get(
+                "excluded_locations",
                 [],
             ),
         )

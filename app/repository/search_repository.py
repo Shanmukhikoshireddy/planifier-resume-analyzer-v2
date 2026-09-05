@@ -558,6 +558,7 @@ class SearchRepository(BaseRepository):
             if content.get("type") not in (
                 "SEARCH",
                 "SEARCH_MODIFICATION",
+                "CANDIDATE_REASONING",
             ):
 
                 continue
@@ -1059,6 +1060,29 @@ class SearchRepository(BaseRepository):
         conversation_message_id: str,
     ):
 
+        # Check existing statuses for this search_id to preserve SHORTLISTED / REJECTED
+        profile_ids = [c.get("profile_id") for c in candidates if c.get("profile_id")]
+        existing_statuses = {}
+        if profile_ids:
+            for rec in self.search_results.find(
+                {"search_id": search_id, "profile_id": {"$in": profile_ids}},
+                {"profile_id": 1, "status": 1}
+            ):
+                st = rec.get("status")
+                if st and st != "PENDING":
+                    existing_statuses[rec["profile_id"]] = st
+
+            try:
+                for rec in self.db["job_vs_candidates"].find(
+                    {"search_id": search_id, "profile_id": {"$in": profile_ids}},
+                    {"profile_id": 1, "status": 1}
+                ):
+                    st = rec.get("status")
+                    if st and st != "PENDING":
+                        existing_statuses[rec["profile_id"]] = st
+            except Exception:
+                pass
+
         # Remove old results belonging to this
         # exact conversation message.
 
@@ -1081,7 +1105,9 @@ class SearchRepository(BaseRepository):
 
             document["search_id"] = search_id
 
-            document["status"] = "PENDING"
+            pid = document.get("profile_id")
+            preserved_status = existing_statuses.get(pid) or document.get("status") or "PENDING"
+            document["status"] = preserved_status
 
             document[
                 "conversation_message_id"
@@ -1191,20 +1217,60 @@ class SearchRepository(BaseRepository):
         search_id: str,
         candidate_name: str,
     ):
+        if not candidate_name:
+            return None
 
-        return self.search_results.find_one(
+        # Ignore pronouns and generic terms to avoid matching arbitrary substring in candidate names
+        pronouns_or_generic = {
+            "he", "him", "his", "she", "her", "hers", "they", "them", "their",
+            "this", "that", "it", "candidate", "the candidate", "this candidate",
+            "selected", "shortlisted", "selected candidate", "shortlisted candidate"
+        }
+        name_clean = candidate_name.strip().lower()
+        if name_clean in pronouns_or_generic:
+            return None
 
+        import re
+        escaped_name = re.escape(candidate_name.strip())
+
+        # 1. Exact match (case-insensitive)
+        doc = self.search_results.find_one(
             {
                 "search_id": search_id,
-
                 "candidate_name": {
-                    "$regex": (
-                        f"^{candidate_name}$"
-                    ),
+                    "$regex": f"^{escaped_name}$",
                     "$options": "i",
                 },
             }
         )
+        if doc:
+            return doc
+
+        # 2. Word boundary match (e.g. "Rahul" matching "Rahul Sharma")
+        doc = self.search_results.find_one(
+            {
+                "search_id": search_id,
+                "candidate_name": {
+                    "$regex": rf"\b{escaped_name}\b",
+                    "$options": "i",
+                },
+            }
+        )
+        if doc:
+            return doc
+
+        # 3. Substring match only for specific non-short strings (len >= 3)
+        if len(candidate_name.strip()) >= 3:
+            doc = self.search_results.find_one(
+                {
+                    "search_id": search_id,
+                    "candidate_name": {
+                        "$regex": escaped_name,
+                        "$options": "i",
+                    },
+                }
+            )
+        return doc
 
     # =========================================================
     # Get Results By Conversation Message
@@ -1266,6 +1332,23 @@ class SearchRepository(BaseRepository):
             )
         )
 
+        # Fallback: if this conversation_message_id was a CANDIDATE_REASONING message,
+        # retrieve the candidate referenced in the message
+        if not results and conversation_message_id:
+            try:
+                from bson import ObjectId
+                msg_doc = self.db["conversation_messages"].find_one(
+                    {"_id": ObjectId(conversation_message_id)}
+                )
+                if msg_doc and msg_doc.get("intent") == "CANDIDATE_REASONING":
+                    asst_msg = msg_doc.get("assistant_message", {})
+                    if isinstance(asst_msg, dict) and asst_msg.get("profile_id"):
+                        cand = self.get_candidate(search_id, asst_msg["profile_id"])
+                        if cand:
+                            results = [cand]
+            except Exception:
+                pass
+
         for result in results:
             result["_id"] = str(
                 result["_id"]
@@ -1283,7 +1366,7 @@ class SearchRepository(BaseRepository):
         profile_id: str,
     ):
 
-        result = self.search_results.update_one(
+        result = self.search_results.update_many(
 
             {
                 "search_id": search_id,
@@ -1313,7 +1396,7 @@ class SearchRepository(BaseRepository):
         profile_id: str,
     ):
 
-        result = self.search_results.update_one(
+        result = self.search_results.update_many(
 
             {
                 "search_id": search_id,
@@ -1343,7 +1426,7 @@ class SearchRepository(BaseRepository):
         profile_id: str,
     ):
 
-        result = self.search_results.update_one(
+        result = self.search_results.update_many(
 
             {
                 "search_id": search_id,
@@ -1376,7 +1459,7 @@ class SearchRepository(BaseRepository):
         profile_id: str,
     ):
 
-        result = self.search_results.update_one(
+        result = self.search_results.update_many(
 
             {
                 "search_id": search_id,
@@ -1463,4 +1546,60 @@ class SearchRepository(BaseRepository):
                 result["_id"]
             )
 
+        return results
+
+    # =========================================================
+    # Get Shortlisted / Rejected By Job Position
+    # =========================================================
+
+    def get_shortlisted_by_job_position(
+        self,
+        job_position: str,
+    ):
+        if not job_position:
+            return []
+        import re
+        regex = re.escape(job_position.strip())
+        results = list(
+            self.search_results.find(
+                {
+                    "status": "SHORTLISTED",
+                    "$or": [
+                        {"job_position": {"$regex": regex, "$options": "i"}},
+                        {"job_title": {"$regex": regex, "$options": "i"}},
+                        {"designation": {"$regex": regex, "$options": "i"}},
+                        {"title": {"$regex": regex, "$options": "i"}},
+                        {"parsed_search.title": {"$regex": regex, "$options": "i"}},
+                    ],
+                }
+            ).sort("created_at", -1)
+        )
+        for result in results:
+            result["_id"] = str(result["_id"])
+        return results
+
+    def get_rejected_by_job_position(
+        self,
+        job_position: str,
+    ):
+        if not job_position:
+            return []
+        import re
+        regex = re.escape(job_position.strip())
+        results = list(
+            self.search_results.find(
+                {
+                    "status": "REJECTED",
+                    "$or": [
+                        {"job_position": {"$regex": regex, "$options": "i"}},
+                        {"job_title": {"$regex": regex, "$options": "i"}},
+                        {"designation": {"$regex": regex, "$options": "i"}},
+                        {"title": {"$regex": regex, "$options": "i"}},
+                        {"parsed_search.title": {"$regex": regex, "$options": "i"}},
+                    ],
+                }
+            ).sort("created_at", -1)
+        )
+        for result in results:
+            result["_id"] = str(result["_id"])
         return results

@@ -215,17 +215,64 @@ class CandidateActionService:
 
     def shortlisted(
         self,
-        search_id,
+        search_id: str,
+        job_position: str = None,
     ):
-
         results = self.search_repository.get_shortlisted_candidates(
             search_id
-        )
+        ) if search_id else []
+
+        if job_position:
+            import re
+            jp_lower = job_position.lower().strip()
+            filtered = [
+                c for c in results
+                if jp_lower in str(c.get("job_position") or c.get("job_title") or c.get("designation") or "").lower()
+            ]
+            if filtered:
+                results = filtered
+            else:
+                # 1. Search search_results across all searches for this job position
+                job_results = self.search_repository.get_shortlisted_by_job_position(job_position)
+                if job_results:
+                    results = job_results
+                else:
+                    # 2. Check JOB_POSITIONS collection by title, then job_vs_candidates
+                    try:
+                        from app.repository.job_position_repository import JobPositionRepository
+                        jp_repo = JobPositionRepository()
+                        matched_job = jp_repo.find_by_title(job_position)
+                        if matched_job:
+                            job_id = str(matched_job.get("_id"))
+                            jvc_records = list(self.job_vs_candidate_repository.collection.find({
+                                "job_id": job_id,
+                                "status": "SHORTLISTED",
+                            }))
+                            profile_ids = [r.get("profile_id") for r in jvc_records if r.get("profile_id")]
+                            if profile_ids:
+                                matched_candidates = list(self.search_repository.search_results.find({
+                                    "profile_id": {"$in": profile_ids}
+                                }))
+                                seen = set()
+                                deduped = []
+                                for cand in matched_candidates:
+                                    pid = cand.get("profile_id")
+                                    if pid and pid not in seen:
+                                        seen.add(pid)
+                                        cand["status"] = "SHORTLISTED"
+                                        cand["_id"] = str(cand["_id"])
+                                        deduped.append(cand)
+                                if deduped:
+                                    results = deduped
+                    except Exception as e:
+                        logger.warning(f"Error finding shortlisted by job_position: {e}")
+
         if not results:
+            msg = f"No shortlisted candidates found for {job_position}." if job_position else "No shortlisted candidates found."
             return {
                 "search_id": search_id,
                 "total_candidates": 0,
-                "message": "No shortlisted candidates found.",
+                "message": msg,
                 "results": [],
             }
 
@@ -234,8 +281,6 @@ class CandidateActionService:
             "total_candidates": len(results),
             "results": results,
         }
-        
-    
 
     ##########################################################
     # Show Rejected
@@ -243,17 +288,62 @@ class CandidateActionService:
 
     def rejected(
         self,
-        search_id,
+        search_id: str,
+        job_position: str = None,
     ):
-
-        results=self.search_repository.get_rejected_candidates(
+        results = self.search_repository.get_rejected_candidates(
             search_id
-        )
+        ) if search_id else []
+
+        if job_position:
+            import re
+            jp_lower = job_position.lower().strip()
+            filtered = [
+                c for c in results
+                if jp_lower in str(c.get("job_position") or c.get("job_title") or c.get("designation") or "").lower()
+            ]
+            if filtered:
+                results = filtered
+            else:
+                job_results = self.search_repository.get_rejected_by_job_position(job_position)
+                if job_results:
+                    results = job_results
+                else:
+                    try:
+                        from app.repository.job_position_repository import JobPositionRepository
+                        jp_repo = JobPositionRepository()
+                        matched_job = jp_repo.find_by_title(job_position)
+                        if matched_job:
+                            job_id = str(matched_job.get("_id"))
+                            jvc_records = list(self.job_vs_candidate_repository.collection.find({
+                                "job_id": job_id,
+                                "status": "REJECTED",
+                            }))
+                            profile_ids = [r.get("profile_id") for r in jvc_records if r.get("profile_id")]
+                            if profile_ids:
+                                matched_candidates = list(self.search_repository.search_results.find({
+                                    "profile_id": {"$in": profile_ids}
+                                }))
+                                seen = set()
+                                deduped = []
+                                for cand in matched_candidates:
+                                    pid = cand.get("profile_id")
+                                    if pid and pid not in seen:
+                                        seen.add(pid)
+                                        cand["status"] = "REJECTED"
+                                        cand["_id"] = str(cand["_id"])
+                                        deduped.append(cand)
+                                if deduped:
+                                    results = deduped
+                    except Exception as e:
+                        logger.warning(f"Error finding rejected by job_position: {e}")
+
         if not results:
+            msg = f"No rejected candidates found for {job_position}." if job_position else "No rejected candidates found."
             return {
                 "search_id": search_id,
                 "total_candidates": 0,
-                "message": "No rejected candidates found.",
+                "message": msg,
                 "results": [],
             }
 
